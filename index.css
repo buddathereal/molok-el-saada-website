@@ -1,0 +1,303 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --font-header: "Noto Sans Arabic", sans-serif;
+  --font-numbers: "Montserrat", sans-serif;
+  --color-royal-gold: #c5a059;
+
+  @keyframes shimmer {
+    to {
+      background-position: 200% center;
+    }
+  }
+  @keyframes floatGlow1 {
+    0% { transform: translate(0px, 0px) scale(1); }
+    33% { transform: translate(120px, -80px) scale(1.15); }
+    66% { transform: translate(-60px, 120px) scale(0.85); }
+    100% { transform: translate(0px, 0px) scale(1); }
+  }
+  @keyframes floatGlow2 {
+    0% { transform: translate(0px, 0px) scale(1); }
+    50% { transform: translate(-100px, 150px) scale(0.9); }
+    100% { transform: translate(0px, 0px) scale(1); }
+  }
+  @keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  --animate-shimmer: shimmer 3s linear infinite;
+  --animate-float-glow-1: floatGlow1 25s ease-in-out infinite;
+  --animate-float-glow-2: floatGlow2 30s ease-in-out infinite;
+  --animate-gradient-slow: gradientShift 15s ease infinite;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
+  body {
+    @apply bg-[#050505] text-white selection:bg-[#c5a059] selection:text-black overflow-x-hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Prevent auto-zoom in iOS Safari on input focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  @media (min-width: 640px) {
+    input, select, textarea {
+      font-size: inherit !important;
+    }
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-black;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-[#c5a059]/20 rounded-full hover:bg-[#c5a059]/40 transition-colors;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .touch-pan-y {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.05] shadow-2xl;
+  }
+
+  .glass-nav {
+    @apply bg-black/60 backdrop-blur-2xl border-b border-white/[0.05];
+  }
+
+  .gold-text-shimmer {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#c5a059] via-[#f7e1a0] to-[#8b6914] bg-[length:200%_auto] animate-shimmer;
+  }
+
+  .grain-overlay {
+    @apply fixed inset-0 pointer-events-none z-[9999] opacity-[0.03];
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Royal Luxury Buttons fit for Molok El Saada */
+  .royal-btn-primary,
+  .golden-button {
+    touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    outline: none;
+    font-family: inherit;
+    font-size: 0.925rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 235, 175, 0.45);
+    border-radius: 1.25rem;
+    padding: 0.95rem 2.25rem;
+    background: linear-gradient(135deg, #e5c483 0%, #c5a059 45%, #9b772e 100%);
+    color: #0c0c0c;
+    box-shadow: 0 10px 30px -4px rgba(197, 160, 89, 0.35), 0 2px 6px rgba(0, 0, 0, 0.5),
+      inset 0 1px 1px rgba(255, 255, 255, 0.7), inset 0 -1px 2px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .royal-btn-primary::before,
+  .golden-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transform: skewX(-20deg);
+    transition: left 0.7s ease;
+  }
+
+  .royal-btn-primary:hover::before,
+  .golden-button:hover::before {
+    left: 140%;
+  }
+
+  .royal-btn-primary:hover,
+  .golden-button:hover {
+    background: linear-gradient(135deg, #f0d79d 0%, #d6b26b 45%, #a88339 100%);
+    box-shadow: 0 14px 36px -4px rgba(197, 160, 89, 0.55), 0 0 25px rgba(197, 160, 89, 0.4),
+      inset 0 1px 2px rgba(255, 255, 255, 0.9);
+    border-color: rgba(255, 245, 210, 0.7);
+    transform: translateY(-2px);
+    color: #000000;
+  }
+
+  .royal-btn-primary:active,
+  .golden-button:active {
+    transform: translateY(1px) scale(0.98);
+    box-shadow: 0 4px 14px rgba(197, 160, 89, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.35);
+  }
+
+  .royal-btn-secondary {
+    touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    outline: none;
+    font-family: inherit;
+    font-size: 0.925rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    box-sizing: border-box;
+    border: 1px solid rgba(197, 160, 89, 0.35);
+    border-radius: 1.25rem;
+    padding: 0.95rem 2.25rem;
+    background: rgba(12, 12, 12, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    color: #ffffff;
+    box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .royal-btn-secondary:hover {
+    background: rgba(197, 160, 89, 0.14);
+    border-color: rgba(197, 160, 89, 0.8);
+    box-shadow: 0 14px 36px -4px rgba(0, 0, 0, 0.7), 0 0 25px rgba(197, 160, 89, 0.3),
+      inset 0 1px 1px rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+    color: #f7e1a0;
+  }
+
+  .royal-btn-secondary:active {
+    transform: translateY(1px) scale(0.98);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  }
+
+  .royal-btn-emerald {
+    touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    outline: none;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 800;
+    border: 1px solid rgba(37, 211, 102, 0.4);
+    border-radius: 1.25rem;
+    padding: 0.9rem 2rem;
+    background: linear-gradient(135deg, rgba(37, 211, 102, 0.15) 0%, rgba(18, 140, 126, 0.25) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: #25d366;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .royal-btn-emerald:hover {
+    background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+    border-color: #25d366;
+    color: #050505;
+    box-shadow: 0 12px 32px rgba(37, 211, 102, 0.4), 0 0 25px rgba(37, 211, 102, 0.25);
+    transform: translateY(-2px);
+  }
+
+  .royal-btn-emerald:active {
+    transform: translateY(1px) scale(0.98);
+  }
+
+  /* Responsive compact styles for mobile / iPhone */
+  @media (max-width: 640px) {
+    .royal-btn-primary,
+    .golden-button {
+      padding: 0.75rem 1.25rem;
+      font-size: 0.825rem;
+      border-radius: 1rem;
+      gap: 0.5rem;
+    }
+
+    .royal-btn-secondary {
+      padding: 0.75rem 1.25rem;
+      font-size: 0.825rem;
+      border-radius: 1rem;
+      gap: 0.5rem;
+    }
+
+    .royal-btn-emerald {
+      padding: 0.75rem 1.25rem;
+      font-size: 0.825rem;
+      border-radius: 1rem;
+      gap: 0.5rem;
+    }
+  }
+}
+
+
+
+/* 3D Card Effect */
+.card-3d {
+  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
+}
+
+.card-3d:hover {
+  transform: perspective(1000px) rotateX(2deg) rotateY(2deg) scale(1.02);
+}
+
+/* Gold Glow */
+.gold-glow {
+  box-shadow: 0 0 20px rgba(197, 160, 89, 0.1);
+}
+
+.gold-glow:hover {
+  box-shadow: 0 0 40px rgba(197, 160, 89, 0.2);
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Remix: (Molok El Saada Catering)",
+  "description": "Interactive digital menu for Molok El Saada (Kings of Happiness) Wedding Catering, featuring Open Buffets, Set Menus, and Coffee Corner services with price calculation tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
