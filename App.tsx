@@ -1,18 +1,84 @@
-
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { GoogleGenAI } from "@google/genai";
-import { motion, AnimatePresence, useScroll, useTransform } from 'motion/react';
+import React, { useState, useRef, useEffect, useMemo, useReducer } from 'react';
+import { motion, AnimatePresence, MotionConfig, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { X, ChevronRight, ArrowRight, ArrowLeft, ShoppingBasket, Sparkles, Award, Crown, Compass, Gem } from 'lucide-react';
 import { BEVERAGES_MENU, SOFT_DRINKS, SERVICE_COSTS, EQUIPMENT_DATA, BEVERAGES_CATEGORIES } from './data';
-import { MenuPackage, EquipmentCategory, EquipmentItem } from './types';
-import { OfficeMap } from './OfficeMap';
+import type { MenuPackage, EquipmentCategory, EquipmentItem } from './types';
 import { useGsapScrollTrigger } from './useGsap';
 import { BookingSection } from './BookingSection';
+import {
+  buildEquipmentOrderSummary,
+  buildWhatsAppOrderMessage,
+  buildWhatsAppUrl,
+  calculateOrderTotal,
+  clampGuestCount,
+  initialOrderContext,
+  normalizeQuantity,
+  openWhatsAppMessage,
+  orderContextReducer,
+  resolveEquipmentSelections,
+  validateCustomerInfo
+} from './utils/order-utils.js';
+import { normalizeNavigationHistoryState } from './utils/navigation-history.js';
 
 // --- CONFIGURATION ---
 const USER_LOGO_URL = "https://i.postimg.cc/xj33dFYd/Picsart-26-01-31-03-15-31-627.png"; 
 const WHATSAPP_PHONE = "201097356529";
 const WHATSAPP_BUSINESS_LINK = "https://wa.me/201097356529";
+
+type AppView = 'home' | 'portal' | 'category' | 'tools' | 'contact';
+
+const OfficeMap = React.lazy(async () => {
+  const { OfficeMap: LazyOfficeMap } = await import('./OfficeMap');
+  return { default: LazyOfficeMap };
+});
+const CustomerInfoModal = React.lazy(async () => {
+  const { CustomerInfoModal: LazyCustomerInfoModal } = await import('./CustomerInfoModal');
+  return { default: LazyCustomerInfoModal };
+});
+
+const EMPTY_CUSTOMER_INFO = {
+  name: '',
+  phone: '',
+  eventDate: '',
+  eventLocation: '',
+  message: '',
+  agreedToDeposit: false
+};
+
+const NAV_ITEMS: Array<{ v: AppView; l: string }> = [
+  { v: 'home', l: 'الرئيسية' },
+  { v: 'portal', l: 'المنيو' },
+  { v: 'tools', l: 'المعدات' },
+  { v: 'contact', l: 'تواصل معنا' }
+];
+
+const optimizeCloudinaryImage = (url: string, width: number) =>
+  url.includes('/image/upload/')
+    ? url.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${width},c_limit/`)
+    : url;
+
+const cloudinarySrcSet = (url: string) =>
+  url.includes('/image/upload/')
+    ? [480, 960, 1440].map((width) => `${optimizeCloudinaryImage(url, width)} ${width}w`).join(', ')
+    : undefined;
+
+const SERVICE_CATEGORY_PACKAGE: MenuPackage = {
+  id: 'srv-cat',
+  title: 'طاقم الخدمة والضيافة',
+  price: -1,
+  sections: [{ name: 'طاقم العمل', items: SERVICE_COSTS.map((service) => service.label) }]
+};
+
+const PORTAL_CATEGORIES: Array<{
+  id: string;
+  displayName: string;
+  icon: string;
+  data: MenuPackage[];
+  desc: string;
+}> = [
+  { id: 'Beverages', displayName: 'مشروبات', icon: '☕', data: BEVERAGES_MENU, desc: 'ركن المشروبات الملكي' },
+  { id: 'Services', displayName: 'خدمات', icon: '🤵', data: [SERVICE_CATEGORY_PACKAGE], desc: 'الويترز والشيف والباريستا' }
+];
 
 // --- Shared Components ---
 
@@ -53,178 +119,6 @@ const WhatsAppIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" 
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
   </svg>
 );
-
-const CustomerInfoModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  info: {
-    name: string;
-    phone: string;
-    eventDate: string;
-    eventLocation: string;
-    message: string;
-    agreedToDeposit: boolean;
-  };
-  setInfo: React.Dispatch<React.SetStateAction<{
-    name: string;
-    phone: string;
-    eventDate: string;
-    eventLocation: string;
-    message: string;
-    agreedToDeposit: boolean;
-  }>>;
-}> = ({ isOpen, onClose, onConfirm, info, setInfo }) => {
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
-
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      alert("متصفحك لا يدعم تحديد الموقع");
-      return;
-    }
-    setIsGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const locationLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
-        setInfo(prev => ({ ...prev, eventLocation: locationLink }));
-        setIsGettingLocation(false);
-      },
-      (error) => {
-        console.error("Error getting location:", error);
-        alert("فشل تحديد الموقع، يرجى إدخاله يدوياً");
-        setIsGettingLocation(false);
-      }
-    );
-  };
-
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/80 backdrop-blur-md"
-          />
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="bg-[#0c0c0c] border border-[#c5a059]/30 w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden relative z-10 text-right"
-          >
-            <div className="p-6 border-b border-[#c5a059]/10 flex justify-between items-center flex-row-reverse">
-              <h3 className="text-white font-black font-header text-xl">تأكيد بيانات الحجز</h3>
-              <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
-                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                 </svg>
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-500 font-black uppercase tracking-widest block">الاسم ثنائي</label>
-                <input 
-                  type="text" 
-                  value={info.name}
-                  onChange={(e) => setInfo(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-royal-gold/50 outline-none transition-all text-right focus:ring-1 focus:ring-royal-gold/20"
-                  placeholder="أدخل اسمك بالكامل (ثنائي على الأقل)"
-                />
-              </div>
-              
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-500 font-black uppercase tracking-widest block">رقم الهاتف</label>
-                <input 
-                  type="tel" 
-                  value={info.phone}
-                  onChange={(e) => setInfo(prev => ({ ...prev, phone: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-royal-gold/50 outline-none transition-all text-right focus:ring-1 focus:ring-royal-gold/20"
-                  placeholder="أدخل رقم هاتفك"
-                />
-              </div>
-              
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-500 font-black uppercase tracking-widest block">ميعاد المناسبة</label>
-                <input 
-                  type="text" 
-                  value={info.eventDate}
-                  onChange={(e) => setInfo(prev => ({ ...prev, eventDate: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-royal-gold/50 outline-none transition-all text-right focus:ring-1 focus:ring-royal-gold/20"
-                  placeholder="مثال: الجمعة القادمة الساعة 8 مساءً"
-                />
-              </div>
-              
-              <div className="space-y-1">
-                <div className="flex justify-between items-center mb-1">
-                  <button 
-                    onClick={handleGetLocation}
-                    disabled={isGettingLocation}
-                    className="text-[9px] text-royal-gold font-black uppercase tracking-widest hover:underline disabled:opacity-50"
-                  >
-                    {isGettingLocation ? 'جاري التحديد...' : 'تحديد موقعي الحالي 📍'}
-                  </button>
-                  <label className="text-[10px] text-zinc-500 font-black uppercase tracking-widest block">مكان المناسبة أو اللوكيشن (اختياري)</label>
-                </div>
-                <input 
-                  type="text" 
-                  value={info.eventLocation}
-                  onChange={(e) => setInfo(prev => ({ ...prev, eventLocation: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-royal-gold/50 outline-none transition-all text-right focus:ring-1 focus:ring-royal-gold/20"
-                  placeholder="أدخل العنوان أو رابط اللوكيشن"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-500 font-black uppercase tracking-widest block">ملاحظات إضافية</label>
-                <textarea 
-                  value={info.message}
-                  onChange={(e) => setInfo(prev => ({ ...prev, message: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-royal-gold/50 outline-none transition-all text-right focus:ring-1 focus:ring-royal-gold/20 min-h-[100px] resize-none"
-                  placeholder="أدخل أي ملاحظات أو طلبات خاصة هنا..."
-                />
-              </div>
-
-              <div className="pt-4 border-t border-white/5">
-                <label className="flex items-center gap-3 cursor-pointer group flex-row-reverse text-right">
-                  <div className="relative">
-                    <input 
-                      type="checkbox" 
-                      checked={info.agreedToDeposit}
-                      onChange={(e) => setInfo(prev => ({ ...prev, agreedToDeposit: e.target.checked }))}
-                      className="peer sr-only"
-                    />
-                    <div className="w-6 h-6 border-2 border-white/10 rounded-lg group-hover:border-royal-gold/50 transition-all peer-checked:bg-royal-gold peer-checked:border-royal-gold flex items-center justify-center">
-                      <CheckIcon className="w-4 h-4 text-black scale-0 peer-checked:scale-100 transition-transform" />
-                    </div>
-                  </div>
-                  <span className="text-[11px] text-zinc-300 font-bold leading-relaxed">
-                    أقر بالموافقة على دفع <span className="text-royal-gold">30% ديبوزت (عربون)</span> من إجمالي المبلغ لتأكيد الحجز.
-                  </span>
-                </label>
-              </div>
-            </div>
-            
-            <div className="p-6 bg-[#111] border-t border-[#c5a059]/10">
-              <motion.button 
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={onConfirm}
-                disabled={!info.name || !info.phone || !info.eventDate || !info.agreedToDeposit}
-                className="royal-btn-primary w-full py-4 text-xs md:text-sm font-black uppercase tracking-widest disabled:opacity-40 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-2.5 shadow-xl"
-              >
-                <span>تأكيد الطلب وإرسال للواتساب</span>
-                <WhatsAppIcon className="w-4.5 h-4.5 text-black" />
-              </motion.button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-};
 
 const CheckIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
@@ -277,8 +171,12 @@ const FloatingCart: React.FC<{
   onBeverageQuantityChange: (item: string, delta: number) => void;
   onRemoveBeverage: (item: string) => void;
   selectedDrinks: string[];
+  drinkQuantities: Record<string, number>;
+  onDrinkQuantityChange: (item: string, delta: number) => void;
   onRemoveDrink: (item: string) => void;
   selectedExtraServices: string[];
+  serviceQuantities: Record<string, number>;
+  onServiceQuantityChange: (item: string, delta: number) => void;
   onRemoveService: (item: string) => void;
   selectedPkg: MenuPackage | undefined;
   onRemovePkg: () => void;
@@ -377,13 +275,14 @@ const FloatingCart: React.FC<{
                 <div className="flex items-center gap-2">
                   {hasItems && (
                     <button 
+                      type="button"
                       onClick={onClearAll}
                       className="text-[9px] text-red-500 font-black uppercase tracking-widest hover:text-red-400 transition-colors"
                     >
                       مسح الكل
                     </button>
                   )}
-                  <button onClick={() => { setIsOpen(false); setHasClosedOnce(true); }} className="w-11 h-11 md:w-10 md:h-10 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
+                  <button type="button" aria-label="إغلاق سلة الطلبات" onClick={() => { setIsOpen(false); setHasClosedOnce(true); }} className="w-11 h-11 md:w-11 md:h-11 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
                     <X className="w-5 h-5 text-zinc-400" />
                   </button>
                 </div>
@@ -392,10 +291,11 @@ const FloatingCart: React.FC<{
               {/* PAX Selection in Cart */}
               <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                 <div className="flex justify-between items-center mb-2 flex-row-reverse">
-                  <span className="text-[10px] font-black text-royal-gold uppercase tracking-widest">عدد الأفراد (PAX)</span>
+                  <label htmlFor="cart-pax" className="text-[10px] font-black text-royal-gold uppercase tracking-widest">عدد الأفراد (PAX)</label>
                   <span className="text-white font-black font-numbers text-lg">{calcPax}</span>
                 </div>
                 <input 
+                  id="cart-pax"
                   type="range" 
                   min="25" 
                   max="1000" 
@@ -440,7 +340,7 @@ const FloatingCart: React.FC<{
                                   </p>
                                 </div>
                               </div>
-                              <button onClick={onRemovePkg} className="text-zinc-600 hover:text-red-500 transition-colors">
+                              <button type="button" aria-label={`إزالة باقة ${selectedPkg.title} من السلة`} onClick={onRemovePkg} className="text-zinc-400 hover:text-red-300 transition-colors flex items-center justify-center">
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
@@ -471,6 +371,8 @@ const FloatingCart: React.FC<{
                                     {price > 0 && <p className="text-royal-gold text-[9px] font-bold mb-2">{(price * qty).toLocaleString()} ج.م</p>}
                                     <div className="flex items-center justify-end gap-3">
                                       <button 
+                                        type="button"
+                                        aria-label={`تقليل كمية ${item}`}
                                         onClick={() => onBeverageQuantityChange(item, -1)}
                                         className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
                                       >
@@ -478,6 +380,8 @@ const FloatingCart: React.FC<{
                                       </button>
                                       <span className="text-white font-black font-numbers text-xs">{qty}</span>
                                       <button 
+                                        type="button"
+                                        aria-label={`زيادة كمية ${item}`}
                                         onClick={() => onBeverageQuantityChange(item, 1)}
                                         className="w-6 h-6 rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-xs"
                                       >
@@ -485,7 +389,7 @@ const FloatingCart: React.FC<{
                                       </button>
                                     </div>
                                   </div>
-                                  <button onClick={() => onRemoveBeverage(item)} className="text-zinc-600 hover:text-red-500 transition-colors p-1">
+                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveBeverage(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
                                     <X className="w-4 h-4" />
                                   </button>
                                 </motion.div>
@@ -523,6 +427,8 @@ const FloatingCart: React.FC<{
                                     )}
                                     <div className="flex items-center justify-end gap-3">
                                       <button 
+                                        type="button"
+                                        aria-label={`تقليل كمية ${item}`}
                                         onClick={() => onDrinkQuantityChange(item, -1)}
                                         className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
                                       >
@@ -530,6 +436,8 @@ const FloatingCart: React.FC<{
                                       </button>
                                       <span className="text-white font-black font-numbers text-xs">{qty}</span>
                                       <button 
+                                        type="button"
+                                        aria-label={`زيادة كمية ${item}`}
                                         onClick={() => onDrinkQuantityChange(item, 1)}
                                         className="w-6 h-6 rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-xs"
                                       >
@@ -537,7 +445,7 @@ const FloatingCart: React.FC<{
                                       </button>
                                     </div>
                                   </div>
-                                  <button onClick={() => onRemoveDrink(item)} className="text-zinc-600 hover:text-red-500 transition-colors p-1">
+                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveDrink(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
                                     <X className="w-4 h-4" />
                                   </button>
                                 </motion.div>
@@ -570,6 +478,8 @@ const FloatingCart: React.FC<{
                                     {!isPerPerson && (
                                       <div className="flex items-center justify-end gap-3">
                                         <button 
+                                          type="button"
+                                          aria-label={`تقليل كمية ${item}`}
                                           onClick={() => onServiceQuantityChange(item, -1)}
                                           className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
                                         >
@@ -577,6 +487,8 @@ const FloatingCart: React.FC<{
                                         </button>
                                         <span className="text-white font-black font-numbers text-xs">{qty}</span>
                                         <button 
+                                          type="button"
+                                          aria-label={`زيادة كمية ${item}`}
                                           onClick={() => onServiceQuantityChange(item, 1)}
                                           className="w-6 h-6 rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-xs"
                                         >
@@ -586,7 +498,7 @@ const FloatingCart: React.FC<{
                                     )}
                                     {isPerPerson && <p className="text-zinc-500 text-[8px] font-bold uppercase tracking-widest">حسب عدد الأفراد</p>}
                                   </div>
-                                  <button onClick={() => onRemoveService(item)} className="text-zinc-600 hover:text-red-500 transition-colors p-1">
+                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveService(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
                                     <X className="w-4 h-4" />
                                   </button>
                                 </motion.div>
@@ -614,7 +526,7 @@ const FloatingCart: React.FC<{
                                   src={item.image} 
                                   alt={item.name} 
                                   className="w-12 h-12 rounded-xl object-cover border border-white/10 cursor-zoom-in hover:scale-110 transition-transform" 
-                                  onClick={() => onZoom(item.image)}
+                                  onClick={() => { if (item.image) onZoom(item.image); }}
                                   referrerPolicy="no-referrer"
                                 />
                                 <div className="flex-1 text-right">
@@ -627,6 +539,8 @@ const FloatingCart: React.FC<{
                                   )}
                                   <div className="flex items-center justify-end gap-3">
                                     <button 
+                                      type="button"
+                                      aria-label={`تقليل كمية ${item.name}`}
                                       onClick={() => onQuantityChange(item.id, -1)}
                                       className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
                                     >
@@ -634,6 +548,8 @@ const FloatingCart: React.FC<{
                                     </button>
                                     <span className="text-white font-black font-numbers text-xs">{equipmentQuantities[item.id] || 1}</span>
                                     <button 
+                                      type="button"
+                                      aria-label={`زيادة كمية ${item.name}`}
                                       onClick={() => onQuantityChange(item.id, 1)}
                                       className="w-6 h-6 rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-xs"
                                     >
@@ -641,7 +557,7 @@ const FloatingCart: React.FC<{
                                     </button>
                                   </div>
                                 </div>
-                                <button onClick={() => onRemoveEquipment(item.id)} className="text-zinc-600 hover:text-red-500 transition-colors p-1">
+                                <button type="button" aria-label={`إزالة ${item.name} من السلة`} onClick={() => onRemoveEquipment(item.id)} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
                                   <X className="w-4 h-4" />
                                 </button>
                               </motion.div>
@@ -722,6 +638,8 @@ const FloatingCart: React.FC<{
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => setIsOpen(true)} 
+          aria-label="فتح سلة الطلبات"
+          aria-expanded={isOpen}
           className="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-[0_10px_40px_rgba(197,160,89,0.4)] flex items-center justify-center gold-shimmer group relative bg-royal-gold pointer-events-auto"
         >
           <ShoppingBasket className="w-6 h-6 md:w-7 md:h-7 text-black" />
@@ -751,26 +669,27 @@ const EquipmentCard: React.FC<{
   item: EquipmentItem; 
   selected: boolean; 
   quantity: number;
-  onToggle: (id: string) => void; 
+  onToggle: (id: string) => void;
   onQuantityChange: (id: string, delta: number) => void;
   onQuantitySet: (id: string, value: number) => void;
-  onShare: (item: EquipmentItem) => void; 
+  onShare: (items: EquipmentItem | EquipmentItem[]) => void;
   onZoom: (image: string) => void;
   selectedItems: string[];
   quantities: Record<string, number>;
   displayOnly?: boolean;
 }> = ({ item, selected, quantity, onToggle, onQuantityChange, onQuantitySet, onShare, onZoom, selectedItems, quantities, displayOnly }) => {
   const [currentImgIdx, setCurrentImgIdx] = useState(0);
-  const images = item.images || [item.image];
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const images = (item.images ?? (item.image ? [item.image] : []))
+    .filter((image): image is string => typeof image === 'string' && image.length > 0);
+  const currentImage = images[currentImgIdx] ?? null;
 
-  useEffect(() => {
-    if (images.length > 1) {
-      const timer = setInterval(() => {
-        setCurrentImgIdx(prev => (prev + 1) % images.length);
-      }, 3000);
-      return () => clearInterval(timer);
-    }
-  }, [images.length]);
+  const handleShareSelected = () => {
+    const selectedOptions = (item.options ?? [])
+      .filter((option) => selectedItems.includes(option.id))
+      .map((option) => ({ id: option.id, name: option.name, price: option.price, image: item.image, note: item.note }));
+    onShare(selectedOptions.length > 0 ? selectedOptions : [item]);
+  };
 
   return (
     <motion.div 
@@ -779,7 +698,7 @@ const EquipmentCard: React.FC<{
       viewport={{ once: true }}
       className={`break-inside-avoid bg-[#0c0c0c] border rounded-[2rem] overflow-hidden card-shadow relative group transition-all duration-500 card-3d gsap-card-reveal gsap-card-interactive ${selected ? 'border-royal-gold/40 ring-1 ring-royal-gold/20' : 'border-white/5'}`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden cursor-zoom-in" onClick={() => onZoom(images[currentImgIdx])}>
+      <div className="relative aspect-[4/3] overflow-hidden cursor-zoom-in" onClick={() => { const activeImage = images[currentImgIdx]; if (activeImage) onZoom(activeImage); }}>
         <AnimatePresence mode="wait">
           <motion.img 
             key={images[currentImgIdx]}
@@ -812,8 +731,10 @@ const EquipmentCard: React.FC<{
 
         {!displayOnly && (
           <button 
-            onClick={() => onShare(item)}
-            className="absolute top-4 right-4 w-10 h-10 bg-black/40 backdrop-blur-md border border-white/10 text-white rounded-full flex items-center justify-center hover:bg-green-500 hover:border-green-500 transition-all duration-300 group/share"
+            type="button"
+            onClick={handleShareSelected}
+            aria-label={`طلب ${item.name ?? 'المعدة'} عبر WhatsApp`}
+            className="absolute top-4 right-4 w-11 h-11 min-w-[44px] min-h-[44px] bg-black/60 backdrop-blur-md border border-white/20 text-white rounded-full flex items-center justify-center hover:bg-green-500 hover:border-green-500 transition-all duration-300 group/share"
             title="اطلب عبر واتساب"
           >
             <WhatsAppIcon className="w-5 h-5 group-hover/share:scale-110 transition-transform" />
@@ -955,20 +876,40 @@ const EquipmentCard: React.FC<{
 };
 
 const App: React.FC = () => {
-  const [view, setView] = useState<'home' | 'portal' | 'category' | 'tools' | 'contact'>('home');
-  const [activeCategory, setActiveCategory] = useState<MenuPackage[]>([]);
-  const [categoryName, setCategoryName] = useState('');
+  const [view, setView] = useState<AppView>('home');
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const activeCategory = useMemo(
+    () => PORTAL_CATEGORIES.find((category) => category.id === categoryId)?.data ?? [],
+    [categoryId]
+  );
+  const categoryName = PORTAL_CATEGORIES.find((category) => category.id === categoryId)?.id ?? '';
   const [activeEquipmentCat, setActiveEquipmentCat] = useState<EquipmentCategory | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
+  const pageTitle = view === 'home'
+    ? 'ملوك السعادة'
+    : view === 'portal'
+      ? 'القوائم'
+      : view === 'category'
+        ? PORTAL_CATEGORIES.find((category) => category.id === categoryId)?.displayName ?? 'القائمة'
+        : view === 'tools'
+          ? activeEquipmentCat?.name ?? 'المعدات'
+          : 'تواصل معنا';
 
   // GSAP ScrollTrigger & Card Hover animations initializer
-  useGsapScrollTrigger([view, activeCategory, activeEquipmentCat, categoryName]);
+  useGsapScrollTrigger([view, activeCategory, activeEquipmentCat, categoryId]);
+
+  useEffect(() => {
+    document.title = view === 'home'
+      ? 'ملوك السعادة - الفخامة في الضيافة'
+      : `${pageTitle} | ملوك السعادة`;
+  }, [pageTitle, view]);
 
   // Parallax scroll effect for hanging lamp (factor of -0.1)
   const { scrollY } = useScroll();
   const lampY = useTransform(scrollY, [0, 1000], [0, -100]);
+  const prefersReducedMotion = useReducedMotion() === true;
 
   // Scroll visibility handling - smooth hide on scroll down
   useEffect(() => {
@@ -1002,58 +943,57 @@ const App: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // History API Sync
+  // History API Sync: restore stable catalogue keys, never copied display labels.
   useEffect(() => {
-    // Initialize history state on first load to ensure back button works
-    if (!window.history.state) {
-      window.history.replaceState({ 
-        view: 'home', 
-        categoryName: '', 
-        activeEquipmentCatId: null 
-      }, '', '');
-    }
+    const applyHistoryState = (rawState: unknown) => {
+      const state = normalizeNavigationHistoryState(
+        rawState,
+        PORTAL_CATEGORIES.map((category) => category.id),
+        EQUIPMENT_DATA.map((category) => category.id)
+      );
+      const nextEquipmentCategory = state.activeEquipmentCatId
+        ? EQUIPMENT_DATA.find((category) => category.id === state.activeEquipmentCatId) ?? null
+        : null;
 
-    const handlePopState = (event: PopStateEvent) => {
-      if (event.state) {
-        const { view: targetView, categoryName: targetCatName, activeEquipmentCatId } = event.state;
-        setView(targetView || 'home');
-        setCategoryName(targetCatName || '');
-        
-        if (activeEquipmentCatId) {
-          const found = EQUIPMENT_DATA.find(c => c.id === activeEquipmentCatId);
-          setActiveEquipmentCat(found || null);
-        } else {
-          setActiveEquipmentCat(null);
-        }
-      } else {
-        // Fallback to home if no state exists
-        setView('home');
-        setCategoryName('');
-        setActiveEquipmentCat(null);
-      }
+      setView(state.view);
+      setCategoryId(state.categoryId);
+      setActiveEquipmentCat(state.view === 'tools' ? nextEquipmentCategory : null);
     };
 
+    const initialState = window.history.state;
+    if (!initialState || typeof initialState.view !== 'string') {
+      window.history.replaceState(
+        { view: 'home', categoryId: null, activeEquipmentCatId: null },
+        '',
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      );
+    }
+    applyHistoryState(window.history.state);
+
+    const handlePopState = (event: PopStateEvent) => applyHistoryState(event.state);
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigateTo = (newView: typeof view, extra: any = {}) => {
-    const state = { 
-      view: newView, 
-      categoryName: extra.categoryName || '', 
-      activeEquipmentCatId: extra.activeEquipmentCatId || null 
-    };
-    window.history.pushState(state, '', '');
+  const navigateTo = (
+    newView: AppView,
+    extra: { categoryId?: string | null; activeEquipmentCatId?: string | null } = {}
+  ) => {
+    const nextCategoryId = newView === 'category' && PORTAL_CATEGORIES.some((category) => category.id === extra.categoryId)
+      ? extra.categoryId ?? null
+      : null;
+    const nextEquipmentCatId = newView === 'tools' ? extra.activeEquipmentCatId ?? null : null;
+    const state = { view: newView, categoryId: nextCategoryId, activeEquipmentCatId: nextEquipmentCatId };
+    window.history.pushState(
+      state,
+      '',
+      `${window.location.pathname}${window.location.search}${window.location.hash}`
+    );
     setView(newView);
-    if (extra.categoryName !== undefined) setCategoryName(extra.categoryName);
-    if (extra.activeEquipmentCatId !== undefined) {
-      const found = EQUIPMENT_DATA.find(c => c.id === extra.activeEquipmentCatId);
-      setActiveEquipmentCat(found || null);
-    } else if (newView === 'tools' && extra.activeEquipmentCatId === undefined) {
-      // Keep existing or clear if not provided
-    } else {
-      setActiveEquipmentCat(null);
-    }
+    setCategoryId(nextCategoryId);
+    setActiveEquipmentCat(
+      nextEquipmentCatId ? EQUIPMENT_DATA.find((category) => category.id === nextEquipmentCatId) ?? null : null
+    );
   };
 
   const [calcPax, setCalcPax] = useState(25);
@@ -1069,22 +1009,17 @@ const App: React.FC = () => {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-  const [isEquipmentOnlyOrder, setIsEquipmentOnlyOrder] = useState(false);
-  const [pendingPkg, setPendingPkg] = useState<MenuPackage | null>(null);
-  const [pendingEquipment, setPendingEquipment] = useState<EquipmentItem[] | null>(null);
-  const [customerInfo, setCustomerInfo] = useState({
-    name: '',
-    phone: '',
-    eventDate: '',
-    eventLocation: '',
-    message: '',
-    agreedToDeposit: false
-  });
+  const [orderContext, dispatchOrderContext] = useReducer(orderContextReducer, initialOrderContext);
+  const pendingPkg = orderContext.kind === 'package-inquiry' ? orderContext.pendingPackage : null;
+  const pendingEquipment = orderContext.kind === 'equipment-inquiry' ? orderContext.pendingEquipment : null;
+  const isEquipmentOnlyOrder = orderContext.kind === 'equipment-inquiry';
+  const [customerInfo, setCustomerInfo] = useState({ ...EMPTY_CUSTOMER_INFO });
+  const [orderNotice, setOrderNotice] = useState('');
   
   // Scroll to top on view change
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [view, activeCategory, activeEquipmentCat]);
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
+  }, [view, activeCategory, activeEquipmentCat, prefersReducedMotion]);
   
   useEffect(() => {
     setSelectedBeverages([]);
@@ -1092,35 +1027,29 @@ const App: React.FC = () => {
   }, [selectedPkgId]);
 
   useEffect(() => {
-    setDrinkQuantities(prev => {
-      const next = { ...prev };
-      Object.keys(next).forEach(key => {
-        next[key] = calcPax;
-      });
-      return next;
-    });
-  }, [calcPax]);
+    if (!orderNotice) return;
+    const timeout = window.setTimeout(() => setOrderNotice(''), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [orderNotice]);
 
-  const openCategory = (name: string, data: MenuPackage[]) => {
-    setCategoryName(name);
-    setActiveCategory(data);
-    navigateTo('category', { categoryName: name });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const openCategory = (id: string) => {
+    navigateTo('category', { categoryId: id });
+    window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
   };
 
   const allPackages = useMemo(() => [...BEVERAGES_MENU], []);
   const selectedPkg = useMemo(() => allPackages.find(p => p.id === selectedPkgId), [selectedPkgId, allPackages]);
 
   const handleBeverageQty = (item: string, delta: number) => {
-    setBeverageQuantities(prev => ({ ...prev, [item]: Math.max(1, (prev[item] || 1) + delta) }));
+    setBeverageQuantities(prev => ({ ...prev, [item]: normalizeQuantity((prev[item] || 1) + delta) }));
   };
 
   const handleDrinkQty = (item: string, delta: number) => {
-    setDrinkQuantities(prev => ({ ...prev, [item]: Math.max(1, (prev[item] || 1) + delta) }));
+    setDrinkQuantities(prev => ({ ...prev, [item]: normalizeQuantity((prev[item] || 1) + delta) }));
   };
 
   const handleServiceQty = (item: string, delta: number) => {
-    setServiceQuantities(prev => ({ ...prev, [item]: Math.max(1, (prev[item] || 1) + delta) }));
+    setServiceQuantities(prev => ({ ...prev, [item]: normalizeQuantity((prev[item] || 1) + delta) }));
   };
 
   const removeBeverage = (item: string) => setSelectedBeverages(prev => prev.filter(b => b !== item));
@@ -1130,9 +1059,11 @@ const App: React.FC = () => {
   const removePkg = () => setSelectedPkgId('');
 
   const clearAll = () => {
+    setCalcPax(25);
     setSelectedPkgId('');
     setSelectedExtraServices([]);
     setSelectedDrinks([]);
+    setDrinkQuantities({});
     setSelectedBeverages([]);
     setBeverageQuantities({});
     setSelectedEquipment([]);
@@ -1141,239 +1072,234 @@ const App: React.FC = () => {
   };
 
   const calculateTotal = () => {
-    let total = 0;
-    
+    const lines: Array<{ unitPrice: number | string; quantity: number | string }> = [];
+
     if (selectedPkg) {
-      total = selectedPkg.perPerson ? selectedPkg.price * calcPax : selectedPkg.price;
+      lines.push({ unitPrice: selectedPkg.price, quantity: selectedPkg.perPerson ? clampGuestCount(calcPax) : 1 });
     }
-    
-    selectedExtraServices.forEach(srv => {
-      const srvData = SERVICE_COSTS.find(s => s.label === srv);
-      if (srvData) {
-        const costNum = parseInt(srvData.price.replace(/[^0-9]/g, '') || '0');
-        const qty = serviceQuantities[srv] || 1;
-        
-        const isPerPerson = srv.includes('Cover') || srv.includes('فرد');
-        const isStaffOrQty = srv.includes('ويترز') || 
-                            srv === 'شيف' || 
-                            srv === 'باريستا' || 
-                            srv.includes('شب') || 
-                            srv.includes('بنت') || 
-                            srv.includes('اشر') || 
-                            srv.includes('هاوس') ||
-                            srv.includes('جراب');
 
-        if (isPerPerson) {
-          total += costNum * calcPax;
-        } else if (isStaffOrQty) {
-          total += costNum * qty;
-        } else {
-          total += costNum;
-        }
-      }
+    selectedExtraServices.forEach((service) => {
+      const serviceData = SERVICE_COSTS.find((item) => item.label === service);
+      if (!serviceData) return;
+      const unitPrice = Number.parseInt(serviceData.price.replace(/[^0-9]/g, '') || '0', 10);
+      const isPerPerson = service.includes('Cover') || service.includes('فرد');
+      const isStaffOrQty = service.includes('ويترز') || service === 'شيف' || service === 'باريستا' ||
+        service.includes('شب') || service.includes('بنت') || service.includes('اشر') ||
+        service.includes('هاوس') || service.includes('جراب');
+      const quantity = isPerPerson ? clampGuestCount(calcPax) : isStaffOrQty ? normalizeQuantity(serviceQuantities[service]) : 1;
+      lines.push({ unitPrice, quantity });
     });
 
-    selectedDrinks.forEach(drk => {
-      const drkData = SOFT_DRINKS.find(d => d.name === drk);
-      if (drkData) {
-        const qty = drinkQuantities[drk] || 1;
-        total += drkData.price * qty;
-      }
+    selectedDrinks.forEach((drinkName) => {
+      const drink = SOFT_DRINKS.find((item) => item.name === drinkName);
+      if (drink) lines.push({ unitPrice: drink.price, quantity: normalizeQuantity(drinkQuantities[drinkName]) });
     });
 
-    selectedBeverages.forEach(bev => {
-      const match = bev.match(/[—\(]\s*(\d+)\s*ج/);
-      const price = match ? parseInt(match[1]) : 0;
-      const qty = beverageQuantities[bev] || 1;
-      total += price * qty;
+    selectedBeverages.forEach((beverage) => {
+      const match = beverage.match(/[—(]\s*(\d+)\s*ج/);
+      if (match) lines.push({ unitPrice: Number.parseInt(match[1], 10), quantity: normalizeQuantity(beverageQuantities[beverage]) });
     });
 
-    selectedEquipment.forEach(id => {
-      const equip = allEquipmentItems.find(e => e.id === id);
-      if (equip && equip.price) {
-        const qty = equipmentQuantities[id] || 1;
-        total += equip.price * qty;
-      }
+    selectedEquipment.forEach((id) => {
+      const equipment = allEquipmentItems.find((item) => item.id === id);
+      if (equipment?.price) lines.push({ unitPrice: equipment.price, quantity: normalizeQuantity(equipmentQuantities[id]) });
     });
 
-    return total;
+    return calculateOrderTotal(lines);
   };
 
-  const handleOrder = () => {
-    setIsEquipmentOnlyOrder(false);
-    setPendingPkg(null);
+  const handleStartBooking = () => {
+    dispatchOrderContext({ type: 'start-booking' });
+    setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
+    setOrderNotice('');
     setIsCustomerModalOpen(true);
   };
 
+  const handleOrder = () => {
+    const hasCartItems = Boolean(
+      selectedPkgId || selectedBeverages.length || selectedDrinks.length ||
+      selectedExtraServices.length || selectedEquipment.length
+    );
+    if (!hasCartItems) {
+      setOrderNotice('السلة فارغة؛ اختر باقة أو صنفاً قبل متابعة الطلب.');
+      return;
+    }
+    handleStartBooking();
+  };
+
   const handleEquipmentOnlyOrder = () => {
-    setIsEquipmentOnlyOrder(true);
-    setPendingPkg(null);
+    const resolved = resolveEquipmentSelections(selectedEquipment, allEquipmentItems);
+    const expectedCount = new Set(selectedEquipment).size;
+    if (resolved.length === 0 || resolved.length !== expectedCount) {
+      setOrderNotice('تعذر تجهيز الطلب لأن بعض اختيارات المعدات غير موجودة في الكتالوج. حدّث الصفحة ثم أعد الاختيار.');
+      return;
+    }
+    dispatchOrderContext({ type: 'start-equipment-inquiry', items: null });
+    setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
     setIsCustomerModalOpen(true);
   };
 
   const handleSharePackage = (pkg: MenuPackage) => {
-    setPendingPkg(pkg);
-    setIsEquipmentOnlyOrder(false);
+    dispatchOrderContext({ type: 'start-package-inquiry', package: pkg });
+    setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
     setIsCustomerModalOpen(true);
   };
 
   const confirmAndSendOrder = () => {
-    const pkgToUse = pendingPkg || selectedPkg;
-    const pkgTitle = pkgToUse?.title || 'باقة مخصصة';
-    const total = calculateTotal().toLocaleString();
-    
-    let details = `*طلب حجز من ملوك السعادة*\n\n`;
-    
-    if (pendingPkg) {
-      details = `*استفسار عن باقة من ملوك السعادة*\n\n`;
-      details += `*الباقة:* ${pendingPkg.title}\n`;
+    if (Object.keys(validateCustomerInfo(customerInfo)).length > 0) return;
+
+    const isPackageInquiry = orderContext.kind === 'package-inquiry';
+    const isEquipmentInquiry = orderContext.kind === 'equipment-inquiry';
+    const header = isPackageInquiry
+      ? '*استفسار عن باقة من ملوك السعادة*'
+      : isEquipmentInquiry
+        ? '*طلب حجز معدات من ملوك السعادة*'
+        : '*طلب حجز من ملوك السعادة*';
+    const sections: string[] = [];
+
+    if (isPackageInquiry && pendingPkg) {
+      sections.push(`*الباقة:* ${pendingPkg.title}`);
       if (pendingPkg.price > 0) {
-        details += `*سعر الباقة:* ${pendingPkg.price.toLocaleString()} ج.م ${pendingPkg.perPerson ? 'للفرد' : ''}\n`;
+        sections.push(`*سعر الباقة:* ${pendingPkg.price.toLocaleString()} ج.م${pendingPkg.perPerson ? ' للفرد' : ''}`);
       }
-      details += `\n`;
-    } else if (pendingEquipment) {
-      details = `*طلب حجز معدات من ملوك السعادة*\n\n`;
-      let grandTotal = 0;
-      pendingEquipment.forEach((item) => {
-        const qty = equipmentQuantities[item.id] || 1;
-        const price = item.price || 0;
-        const total = price * qty;
-        grandTotal += total;
-        details += `- ${item.name || item.id} (عدد ${qty}): ${total.toLocaleString()} ج.م\n`;
-        if (item.image) {
-          details += `  صورة: ${item.image}\n`;
-        }
-      });
-      details += `\n*الإجمالي:* ${grandTotal.toLocaleString()} ج.م\n\n`;
-    } else if (!isEquipmentOnlyOrder) {
-      if (selectedPkg) {
-        details += `*الباقة:* ${selectedPkg.title}\n`;
-        if (selectedPkg.price > 0) {
-          const pkgTotal = selectedPkg.perPerson ? selectedPkg.price * calcPax : selectedPkg.price;
-          details += `*سعر الباقة:* ${selectedPkg.price.toLocaleString()} ج.م ${selectedPkg.perPerson ? 'للفرد' : ''}\n`;
-          if (selectedPkg.perPerson) {
-            details += `*إجمالي الباقة لـ ${calcPax} فرد:* ${pkgTotal.toLocaleString()} ج.م\n`;
+    } else if (isEquipmentInquiry) {
+      const requestedIds = pendingEquipment
+        ? pendingEquipment.map((item) => item.id)
+        : selectedEquipment;
+      const equipment = resolveEquipmentSelections(requestedIds, allEquipmentItems);
+      const expectedCount = new Set(requestedIds).size;
+      if (equipment.length === 0 || equipment.length !== expectedCount) {
+        setOrderNotice('تعذر تجهيز الطلب لأن بعض اختيارات المعدات غير موجودة في الكتالوج. لم تُفتح رسالة WhatsApp.');
+        return;
+      }
+      const summary = buildEquipmentOrderSummary(equipment, equipmentQuantities);
+      if (summary.itemCount === 0 || !summary.lines.trim()) {
+        setOrderNotice('لا توجد معدات صالحة في الطلب. لم تُفتح رسالة WhatsApp.');
+        return;
+      }
+      sections.push(`*المعدات المختارة:*\n${summary.lines}`);
+      if (summary.total > 0) {
+        sections.push(`*إجمالي المعدات ذات السعر المدرج:* ${summary.total.toLocaleString()} ج.م`);
+      }
+    } else {
+      const pkgToUse = selectedPkg;
+      if (pkgToUse) {
+        sections.push(`*الباقة:* ${pkgToUse.title}`);
+        if (pkgToUse.price > 0) {
+          const packageTotal = pkgToUse.perPerson ? pkgToUse.price * calcPax : pkgToUse.price;
+          sections.push(`*سعر الباقة:* ${pkgToUse.price.toLocaleString()} ج.م${pkgToUse.perPerson ? ' للفرد' : ''}`);
+          if (pkgToUse.perPerson) {
+            sections.push(`*إجمالي الباقة لـ ${calcPax} فرد:* ${packageTotal.toLocaleString()} ج.م`);
           }
         }
-        details += `\n`;
       } else {
-        details += `*العدد:* ${calcPax} فرد\n\n`;
+        sections.push(`*العدد:* ${clampGuestCount(calcPax)} فرد`);
       }
 
       if (selectedExtraServices.length > 0) {
-        details += `*الخدمات الإضافية:*\n`;
-        selectedExtraServices.forEach(srv => {
-          const srvData = SERVICE_COSTS.find(s => s.label === srv);
-          if (srvData) {
-            const qty = serviceQuantities[srv] || 1;
-            const costNum = parseInt(srvData.price.replace(/[^0-9]/g, '') || '0');
-            const isPerPerson = srv.includes('Cover') || srv.includes('فرد');
-            const displayQty = isPerPerson ? calcPax : qty;
-            const itemTotal = costNum * displayQty;
-            
-            details += `- ${srv} (${costNum.toLocaleString()} ج.م × ${displayQty}): ${itemTotal.toLocaleString()} ج.م\n`;
-          }
+        const serviceLines = selectedExtraServices.map((service) => {
+          const serviceData = SERVICE_COSTS.find((entry) => entry.label === service);
+          if (!serviceData) return `- ${service}: السعر غير مدرج في القائمة`;
+          const price = Number.parseInt(serviceData.price.replace(/[^0-9]/g, ''), 10) || 0;
+          const quantityBased = service.includes('ويترز') || service === 'شيف' || service === 'باريستا' ||
+            service.includes('شب') || service.includes('بنت') || service.includes('اشر') ||
+            service.includes('هاوس') || service.includes('جراب');
+          const perPerson = service.includes('Cover') || service.includes('فرد');
+          const quantity = perPerson ? clampGuestCount(calcPax) : quantityBased ? normalizeQuantity(serviceQuantities[service]) : 1;
+          if (price <= 0) return `- ${service} (عدد ${quantity}): السعر غير مدرج`;
+          return `- ${service} (${price.toLocaleString()} ج.م × ${quantity}): ${(price * quantity).toLocaleString()} ج.م`;
         });
-        details += `\n`;
+        sections.push(`*الخدمات الإضافية:*\n${serviceLines.join('\n')}`);
       }
 
       if (selectedDrinks.length > 0) {
-        details += `*المشروبات الفردية:*\n`;
-        selectedDrinks.forEach(drk => {
-          const drkData = SOFT_DRINKS.find(d => d.name === drk);
-          if (drkData) {
-            const qty = drinkQuantities[drk] || 1;
-            const itemTotal = drkData.price * qty;
-            details += `- ${drk} (${drkData.price.toLocaleString()} ج.م × ${qty}): ${itemTotal.toLocaleString()} ج.م\n`;
-          }
+        const drinkLines = selectedDrinks.map((drink) => {
+          const item = SOFT_DRINKS.find((entry) => entry.name === drink);
+          const quantity = normalizeQuantity(drinkQuantities[drink]);
+          if (!item || item.price <= 0) return `- ${drink} (عدد ${quantity}): السعر غير مدرج`;
+          return `- ${drink} (${item.price.toLocaleString()} ج.م × ${quantity}): ${(item.price * quantity).toLocaleString()} ج.م`;
         });
-        details += `\n`;
+        sections.push(`*المشروبات الفردية:*\n${drinkLines.join('\n')}`);
       }
 
       if (selectedBeverages.length > 0) {
-        details += `*المشروبات المختارة:*\n`;
-        selectedBeverages.forEach(b => {
-          const match = b.match(/[—\(]\s*(\d+)\s*ج/);
-          const price = match ? parseInt(match[1]) : 0;
-          const qty = beverageQuantities[b] || 1;
-          const itemTotal = price * qty;
-          if (price > 0) {
-            details += `- ${b} (${price.toLocaleString()} ج.م × ${qty}): ${itemTotal.toLocaleString()} ج.م\n`;
-          } else {
-            details += `- ${b} (عدد ${qty})\n`;
-          }
+        const beverageLines = selectedBeverages.map((beverage) => {
+          const match = beverage.match(/[—(]\s*(\d+)\s*ج/);
+          const price = match ? Number.parseInt(match[1], 10) : 0;
+          const quantity = normalizeQuantity(beverageQuantities[beverage]);
+          if (price <= 0) return `- ${beverage} (عدد ${quantity}): السعر غير مدرج`;
+          return `- ${beverage} (${price.toLocaleString()} ج.م × ${quantity}): ${(price * quantity).toLocaleString()} ج.م`;
         });
-        details += `\n`;
+        sections.push(`*المشروبات المختارة:*\n${beverageLines.join('\n')}`);
       }
-    }
 
-    if (selectedEquipment.length > 0 && !pendingPkg && !pendingEquipment) {
-      details += `*المعدات المختارة:*\n`;
-      selectedEquipment.forEach(id => {
-        const equip = allEquipmentItems.find(e => e.id === id);
-        if (equip) {
-          const qty = equipmentQuantities[id] || 1;
-          const price = equip.price || 0;
-          if (price > 0) {
-            details += `- ${equip.name || id} (عدد ${qty}): ${(price * qty).toLocaleString()} ج.م\n`;
-          } else {
-            details += `- ${equip.name || id} (عدد ${qty})\n`;
-          }
-          if (equip.image) {
-            details += `  صورة: ${equip.image}\n`;
-          }
+      if (selectedEquipment.length > 0) {
+        const equipment = resolveEquipmentSelections(selectedEquipment, allEquipmentItems);
+        const expectedCount = new Set(selectedEquipment).size;
+        if (equipment.length !== expectedCount) {
+          setOrderNotice('تعذر تجهيز الطلب لأن بعض اختيارات المعدات غير موجودة في الكتالوج. لم تُفتح رسالة WhatsApp.');
+          return;
         }
-      });
-      details += `\n`;
+        const summary = buildEquipmentOrderSummary(equipment, equipmentQuantities);
+        if (summary.lines.trim()) sections.push(`*المعدات المختارة:*\n${summary.lines}`);
+      }
+
+      const total = calculateTotal();
+      if (total > 0) sections.push(`*الإجمالي النهائي:* ${total.toLocaleString()} ج.م`);
     }
 
-    if (!pendingPkg && !pendingEquipment) {
-      details += `*الإجمالي النهائي:* ${total} ج.م\n\n`;
+    let message: string;
+    try {
+      message = buildWhatsAppOrderMessage({ header, sections, customerInfo });
+    } catch {
+      setOrderNotice('أضف اختياراً واحداً على الأقل قبل تجهيز رسالة WhatsApp.');
+      return;
     }
-    
-    details += `*بيانات العميل:*\n`;
-    details += `- الاسم: ${customerInfo.name}\n`;
-    details += `- الرقم: ${customerInfo.phone}\n`;
-    details += `- ميعاد المناسبة: ${customerInfo.eventDate}\n`;
-    if (customerInfo.eventLocation) {
-      details += `- مكان المناسبة: ${customerInfo.eventLocation}\n`;
-    }
-    if (customerInfo.message) {
-      details += `- ملاحظات: ${customerInfo.message}\n`;
-    }
-    
-    if (customerInfo.agreedToDeposit) {
-      details += `\n✅ العميل موافق على دفع 30% ديبوزت (عربون) لتأكيد الحجز.\n`;
-    }
-    
-    details += `\nيرجى التواصل للتأكيد وتحديد الموعد.`;
 
-    const message = encodeURIComponent(details);
-    window.open(`https://wa.me/${WHATSAPP_PHONE}?text=${message}`, '_blank');
+    const whatsappUrl = buildWhatsAppUrl(WHATSAPP_PHONE, message);
+    const openedWindow = openWhatsAppMessage(whatsappUrl);
+    if (!openedWindow) {
+      setOrderNotice('لم يفتح WhatsApp. اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة. لم يتم إرسال بياناتك.');
+      return;
+    }
+
     setIsCustomerModalOpen(false);
-    setPendingPkg(null);
-    setPendingEquipment(null);
+    dispatchOrderContext({ type: 'reset' });
+    setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
+    clearAll();
+    setOrderNotice('جهّز الموقع الرسالة في WhatsApp فقط؛ راجعها ثم أرسلها من داخل التطبيق.');
+  };
+
+  const closeCustomerModal = () => {
+    setIsCustomerModalOpen(false);
+    dispatchOrderContext({ type: 'reset' });
+    setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
   };
 
   const handleShareEquipment = (items: EquipmentItem | EquipmentItem[]) => {
-    const itemsArray = Array.isArray(items) ? items : [items];
-    setPendingEquipment(itemsArray);
-    setPendingPkg(null);
-    setIsEquipmentOnlyOrder(true);
+    const requested = Array.isArray(items) ? items : [items];
+    const requestedIds = requested.map((item) => item.id);
+    const resolved = resolveEquipmentSelections(requestedIds, allEquipmentItems);
+    if (requestedIds.length === 0 || resolved.length !== new Set(requestedIds).size) {
+      setOrderNotice('تعذر تجهيز الطلب لأن بعض اختيارات المعدات غير موجودة في الكتالوج.');
+      return;
+    }
+    dispatchOrderContext({ type: 'start-equipment-inquiry', items: resolved });
+    setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
     setIsCustomerModalOpen(true);
   };
 
   const updateEquipmentQty = (id: string, delta: number) => {
     setEquipmentQuantities(prev => ({
       ...prev,
-      [id]: Math.max(1, (prev[id] || 1) + delta)
+      [id]: normalizeQuantity((prev[id] || 1) + delta)
     }));
   };
 
   const updateEquipmentQtySet = (id: string, value: number) => {
     setEquipmentQuantities(prev => ({
       ...prev,
-      [id]: Math.max(1, value)
+      [id]: normalizeQuantity(value)
     }));
   };
 
@@ -1429,9 +1355,11 @@ const App: React.FC = () => {
   }, []);
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="min-h-screen bg-[#050505] text-zinc-200 overflow-x-hidden relative">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:right-3 focus:z-[300] focus:bg-[#f7e1a0] focus:text-black focus:px-4 focus:py-3 focus:rounded-xl">تخطي إلى المحتوى</a>
       {/* Smooth Animated Luxury Ambient Gradient Backgrounds & Custom Drawings */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+      <div aria-hidden="true" className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         {/* Soft floating gold and amber light emitters */}
         <div className="absolute top-[15%] left-[-15%] w-[55vw] h-[55vw] md:w-[35vw] md:h-[35vw] bg-[radial-gradient(circle,rgba(197,160,89,0.06)_0%,transparent_70%)] blur-[100px] rounded-full animate-float-glow-1" />
         <div className="absolute top-[50%] right-[-10%] w-[60vw] h-[60vw] md:w-[40vw] md:h-[40vw] bg-[radial-gradient(circle,rgba(197,160,89,0.05)_0%,transparent_70%)] blur-[130px] rounded-full animate-float-glow-2" />
@@ -1472,32 +1400,32 @@ const App: React.FC = () => {
         )}
 
         {/* Center/Main Navigation */}
-        <nav className="flex items-center justify-center gap-4 sm:gap-8 md:gap-10 mx-auto">
-          {[
-            { v: 'home', l: 'الرئيسية' },
-            { v: 'portal', l: 'المنيو' },
-            { v: 'tools', l: 'المعدات' },
-            { v: 'contact', l: 'تواصل معنا' }
-          ].map(nav => (
-            <button 
+        <nav aria-label="القائمة الرئيسية" className="flex items-center justify-center gap-4 sm:gap-8 md:gap-10 mx-auto">
+          {NAV_ITEMS.map((nav) => {
+            const isCurrent = view === nav.v || (nav.v === 'portal' && view === 'category');
+            return (
+            <button
               key={nav.v} 
-              onClick={() => { navigateTo(nav.v as any); if(nav.v === 'tools') setActiveEquipmentCat(null); }} 
-              className={`text-xs md:text-sm font-bold tracking-wide transition-colors relative py-1 whitespace-nowrap drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] ${
-                view === nav.v || (nav.v === 'portal' && view === 'category') 
+              type="button"
+              aria-current={isCurrent ? 'page' : undefined}
+              onClick={() => navigateTo(nav.v)}
+              className={`min-h-[44px] min-w-[44px] text-xs md:text-sm font-bold tracking-wide transition-colors relative py-1 whitespace-nowrap drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] ${
+                isCurrent
                   ? 'text-royal-gold font-black' 
                   : 'text-zinc-300 hover:text-white'
               }`}
             >
               {nav.l}
-              {(view === nav.v || (nav.v === 'portal' && view === 'category')) && (
+              {isCurrent && (
                 <span className="absolute bottom-0 inset-x-0 h-0.5 bg-royal-gold rounded-full shadow-[0_0_8px_#c5a059]" />
               )}
             </button>
-          ))}
+          );})}
         </nav>
       </header>
 
-      <main className="min-h-screen">
+      <main id="main-content" className="min-h-screen" tabIndex={-1}>
+        <h1 className="sr-only">{pageTitle}</h1>
         {view === 'home' && (
           <div className="animate-in fade-in duration-1000">
             {/* Hero Section */}
@@ -1734,17 +1662,14 @@ const App: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 gsap-stagger-container">
-                {[
-                  { name: 'Beverages', displayName: 'مشروبات', icon: '☕', data: BEVERAGES_MENU, desc: 'ركن المشروبات الملكي' },
-                  { name: 'Services', displayName: 'خدمات', icon: '🤵', data: [{ id: 'srv-cat', title: 'طاقم الخدمة والضيافة', price: -1, sections: [{ name: 'طاقم العمل', items: SERVICE_COSTS.map(s => s.label) }] }], desc: 'الويترز والشيف والباريستا' },
-                ].map((cat, i) => (
-                <div key={i} onClick={() => openCategory(cat.name, cat.data)} className="group bg-[#0c0c0c] border border-white/5 p-10 rounded-[3rem] text-center cursor-pointer card-shadow relative overflow-hidden gsap-stagger-item gsap-card-interactive">
+                {PORTAL_CATEGORIES.map((cat) => (
+                <button type="button" key={cat.id} onClick={() => openCategory(cat.id)} aria-label={`استعراض ${cat.displayName}`} className="w-full group bg-[#0c0c0c] border border-white/5 p-10 rounded-[3rem] text-center cursor-pointer card-shadow relative overflow-hidden gsap-stagger-item gsap-card-interactive">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-royal-gold/5 rounded-bl-[10rem] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   <span className="text-7xl block mb-8 grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500">{cat.icon}</span>
                   <h3 className="text-xl font-black text-white group-hover:text-[#c5a059] transition-colors mb-4 font-header">{cat.displayName}</h3>
                   <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest leading-relaxed">{cat.desc}</p>
                   <div className="mt-10 h-0.5 w-12 bg-zinc-800 mx-auto group-hover:w-24 group-hover:bg-[#c5a059] transition-all"></div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -1887,7 +1812,7 @@ const App: React.FC = () => {
                               
                               return (
                                 <li key={j} className={`p-4 rounded-2xl border transition-all flex justify-between items-center flex-row-reverse ${isSelected ? 'border-[#c5a059] bg-[#c5a059]/5' : 'border-white/5 text-zinc-400 hover:text-zinc-200'}`}>
-                                    <div className="flex-1 cursor-pointer text-right flex items-center justify-end gap-3" onClick={() => {
+                                    <button type="button" aria-pressed={isSelected} className="flex-1 min-h-[44px] cursor-pointer text-right flex items-center justify-end gap-3" onClick={() => {
                                       if (isBeverage) {
                                         setSelectedBeverages(prev => {
                                           if (prev.includes(item)) return prev.filter(s => s !== item);
@@ -1913,15 +1838,17 @@ const App: React.FC = () => {
                                         )}
                                       </div>
                                       {!isSelected && (
-                                        <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-zinc-500 hover:border-royal-gold hover:text-royal-gold transition-all">
+                                        <span aria-hidden="true" className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-zinc-400 hover:border-royal-gold hover:text-royal-gold transition-all">
                                           +
-                                        </div>
+                                        </span>
                                       )}
-                                    </div>
+                                    </button>
                                   
                                   {isSelected && needsQty && (
                                     <div className="flex items-center gap-2 bg-black/40 p-1 rounded-lg border border-white/5">
                                       <button 
+                                        type="button"
+                                        aria-label={`تقليل كمية ${item}`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (isBeverage) {
@@ -1935,11 +1862,12 @@ const App: React.FC = () => {
                                         -
                                       </button>
                                       <input 
+                                        aria-label={`كمية ${item}`}
                                         type="number"
                                         min="1"
                                         value={isBeverage ? (beverageQuantities[item] || 1) : (serviceQuantities[item] || 1)}
                                         onChange={(e) => {
-                                          const val = parseInt(e.target.value) || 1;
+                                          const val = normalizeQuantity(e.target.value);
                                           if (isBeverage) {
                                             setBeverageQuantities(prev => ({ ...prev, [item]: val }));
                                           } else if (isService) {
@@ -1947,9 +1875,11 @@ const App: React.FC = () => {
                                           }
                                         }}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="w-10 h-6 bg-white/5 border border-white/10 rounded text-white text-center font-numbers font-bold text-[10px] focus:border-royal-gold/50 outline-none"
+                                        className="w-16 min-h-[44px] bg-white/5 border border-white/10 rounded text-white text-center font-numbers font-bold text-base focus:border-royal-gold/50 outline-none"
                                       />
                                       <button 
+                                        type="button"
+                                        aria-label={`زيادة كمية ${item}`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (isBeverage) {
@@ -2025,13 +1955,15 @@ const App: React.FC = () => {
                   className="mb-10 glass-card p-8 rounded-[2.5rem] border border-[#c5a059]/20 card-shadow text-right max-w-2xl mx-auto"
                 >
                   <div className="flex justify-between items-center mb-6 flex-row-reverse">
-                    <h4 className="text-white font-black font-header">عدد الأفراد (PAX)</h4>
+                    <h4 id="beverage-pax-label" className="text-white font-black font-header">عدد الأفراد (PAX)</h4>
                     <div className="flex items-center gap-4 flex-row-reverse">
                       <motion.span 
                         key={calcPax}
                         initial={{ scale: 1.2, color: "#c5a059" }}
                         animate={{ scale: 1, color: "#c5a059" }}
                         className="text-royal-gold font-numbers text-3xl font-black"
+                        aria-live="polite"
+                        aria-atomic="true"
                       >
                         {calcPax}
                       </motion.span>
@@ -2039,12 +1971,15 @@ const App: React.FC = () => {
                     </div>
                   </div>
                   <input 
+                    id="beverage-pax"
+                    aria-labelledby="beverage-pax-label"
+                    aria-valuetext={`${calcPax} فرد`}
                     type="range" 
                     min="25" 
                     max="1000" 
-                    step="10" 
+                    step="5" 
                     value={calcPax} 
-                    onChange={e => setCalcPax(parseInt(e.target.value))} 
+                    onChange={e => setCalcPax(clampGuestCount(e.target.value))} 
                     className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#c5a059]" 
                   />
                   <div className="flex justify-between mt-4 text-[10px] font-black text-zinc-500 uppercase tracking-widest flex-row-reverse">
@@ -2072,45 +2007,65 @@ const App: React.FC = () => {
                         const isSelected = selectedDrinks.includes(drink.name);
                         const qty = drinkQuantities[drink.name] || 1;
                         return (
-                          <div 
+                          <div
                             key={idx}
-                            onClick={() => {
-                              if (!isSelected) {
-                                setSelectedDrinks(prev => [...prev, drink.name]);
-                                setDrinkQuantities(prev => ({ ...prev, [drink.name]: calcPax }));
-                              } else {
-                                setSelectedDrinks(prev => prev.filter(d => d !== drink.name));
-                              }
-                            }}
-                            className={`p-8 rounded-[2.5rem] border transition-all duration-500 cursor-pointer flex flex-col justify-between items-center text-center ${isSelected ? 'border-royal-gold bg-royal-gold/5 shadow-royal-gold/10' : 'border-white/5 bg-[#0c0c0c] hover:border-white/10'} card-shadow group`}
+                            className={`p-8 rounded-[2.5rem] border transition-all duration-500 flex flex-col justify-between items-center text-center ${isSelected ? 'border-royal-gold bg-royal-gold/5 shadow-royal-gold/10' : 'border-white/5 bg-[#0c0c0c] hover:border-white/10'} card-shadow group`}
                           >
-                            <div className={`w-12 h-12 rounded-full border flex items-center justify-center mb-6 transition-all duration-500 ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/10 group-hover:border-royal-gold/50'}`}>
-                              {isSelected ? <CheckIcon className="w-6 h-6 text-black" /> : <span className="text-xl">🥤</span>}
-                            </div>
-                            <div>
-                              <div className={`text-lg font-black mb-2 transition-colors duration-500 ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{drink.name}</div>
-                              <div className="text-zinc-500 text-xs font-numbers font-black tracking-widest">{drink.price} EGP / Item</div>
-                            </div>
+                            <button
+                              type="button"
+                              aria-pressed={isSelected}
+                              className="w-full min-h-[44px] flex flex-col items-center text-center"
+                              onClick={() => {
+                                if (!isSelected) {
+                                  setSelectedDrinks((previous) => [...previous, drink.name]);
+                                  setDrinkQuantities((previous) => ({
+                                    ...previous,
+                                    [drink.name]: normalizeQuantity(previous[drink.name] ?? 1)
+                                  }));
+                                } else {
+                                  setSelectedDrinks((previous) => previous.filter((name) => name !== drink.name));
+                                  setDrinkQuantities((previous) => {
+                                    const next = { ...previous };
+                                    delete next[drink.name];
+                                    return next;
+                                  });
+                                }
+                              }}
+                            >
+                              <span aria-hidden="true" className={`w-12 h-12 rounded-full border flex items-center justify-center mb-6 transition-all duration-500 ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/10 group-hover:border-royal-gold/50'}`}>
+                                {isSelected ? <CheckIcon className="w-6 h-6 text-black" /> : <span className="text-xl">🥤</span>}
+                              </span>
+                              <span className={`text-lg font-black mb-2 transition-colors duration-500 ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{drink.name}</span>
+                              <span className="text-zinc-500 text-xs font-numbers font-black tracking-widest">{drink.price} EGP / Item</span>
+                            </button>
                             
                             {isSelected && (
                               <div className="mt-6 space-y-4 w-full animate-in fade-in zoom-in duration-300">
                                 <div className="flex items-center justify-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5">
-                                  <button 
+                                  <button
+                                    type="button"
+                                    aria-label={`تقليل كمية ${drink.name}`}
                                     onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDrinkQuantities(prev => ({ ...prev, [drink.name]: Math.max(1, (prev[drink.name] || 1) - 1) }));
+                                      setDrinkQuantities((previous) => ({
+                                        ...previous,
+                                        [drink.name]: normalizeQuantity((previous[drink.name] || 1) - 1)
+                                      }));
                                     }}
-                                    className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white font-bold"
+                                    className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white font-bold"
                                   >
                                     -
                                   </button>
-                                  <span className="text-white font-black font-numbers min-w-[2rem]">{qty}</span>
-                                  <button 
+                                  <output aria-live="polite" className="text-white font-black font-numbers min-w-[2rem]">{qty}</output>
+                                  <button
+                                    type="button"
+                                    aria-label={`زيادة كمية ${drink.name}`}
                                     onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDrinkQuantities(prev => ({ ...prev, [drink.name]: (prev[drink.name] || 1) + 1 }));
+                                      setDrinkQuantities((previous) => ({
+                                        ...previous,
+                                        [drink.name]: normalizeQuantity((previous[drink.name] || 1) + 1)
+                                      }));
                                     }}
-                                    className="w-8 h-8 rounded-xl bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors font-bold"
+                                    className="w-11 h-11 rounded-xl bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors font-bold"
                                   >
                                     +
                                   </button>
@@ -2435,7 +2390,7 @@ const App: React.FC = () => {
                                   setSelectedEquipment(prev => prev.includes(id) ? prev : [...prev, id]);
                                 }
                               }}
-                              onShare={(i) => handleShareEquipment([i])}
+                              onShare={(items) => handleShareEquipment(items)}
                               onZoom={(img) => setLightboxImage(img)}
                               selectedItems={selectedEquipment}
                               quantities={equipmentQuantities}
@@ -2529,7 +2484,7 @@ const App: React.FC = () => {
                                     setSelectedEquipment(prev => prev.includes(id) ? prev : [...prev, id]);
                                   }
                                 }}
-                                onShare={(i) => handleShareEquipment([i])}
+                                onShare={(items) => handleShareEquipment(items)}
                                 onZoom={(img) => setLightboxImage(img)}
                                 selectedItems={selectedEquipment}
                                 quantities={equipmentQuantities}
@@ -2547,8 +2502,8 @@ const App: React.FC = () => {
            </div>
         )}
 
-        <AnimatePresence>
-          {lightboxImage && (
+      <AnimatePresence>
+        {lightboxImage && (
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -2569,9 +2524,20 @@ const App: React.FC = () => {
                 referrerPolicy="no-referrer"
               />
             </motion.div>
-          )}
-        </AnimatePresence>
+        )}
+      </AnimatePresence>
       </main>
+
+      {orderNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom,0px)+6rem)] z-[250] mx-auto max-w-xl rounded-2xl border border-[#c5a059]/40 bg-[#111]/95 px-5 py-4 text-center text-sm text-white shadow-2xl"
+        >
+          {orderNotice}
+        </div>
+      )}
 
       <AnimatePresence>
         {view !== 'home' && (
@@ -2625,13 +2591,17 @@ const App: React.FC = () => {
         />
       )}
 
-      <CustomerInfoModal 
-        isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
-        onConfirm={confirmAndSendOrder}
-        info={customerInfo}
-        setInfo={setCustomerInfo}
-      />
+      {isCustomerModalOpen && (
+        <React.Suspense fallback={<div role="status" className="fixed inset-x-4 bottom-6 z-[250] rounded-2xl bg-[#111] p-4 text-center text-sm">جارٍ تجهيز نموذج الحجز…</div>}>
+          <CustomerInfoModal
+            isOpen={isCustomerModalOpen}
+            onClose={closeCustomerModal}
+            onConfirm={confirmAndSendOrder}
+            info={customerInfo}
+            setInfo={setCustomerInfo}
+          />
+        </React.Suspense>
+      )}
 
       <footer className="py-24 md:py-36 bg-[#020202] text-center relative overflow-hidden">
          {/* Background Video with luxury atmospheric treatment */}
@@ -2692,6 +2662,7 @@ const App: React.FC = () => {
          <p className="text-zinc-200 text-[9px] font-bold uppercase tracking-widest relative z-10 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">© 2025 Molok El Saada. Designed for Royalty.</p>
       </footer>
     </div>
+    </MotionConfig>
   );
 };
 

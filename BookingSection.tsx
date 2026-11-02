@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft } from 'lucide-react';
 
@@ -43,14 +43,6 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
 }) => {
   const [activeStep, setActiveStep] = useState(0);
   const handleBrowseEquipment = onBrowseEquipment || onBrowsePackages;
-
-  // Smooth auto-cycle between steps (6 seconds) with user interactive selection
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setActiveStep((prev) => (prev + 1) % STEPS.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, []);
 
   return (
     <section 
@@ -167,7 +159,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
                     key={step.id}
                     type="button"
                     onClick={() => setActiveStep(step.id)}
-                    className={`relative flex items-center gap-3 p-3 rounded-xl transition-all duration-300 text-right w-full cursor-pointer focus:outline-none ${
+                    className={`relative flex items-center gap-3 p-3 min-h-[44px] rounded-xl transition-all duration-300 text-right w-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c5a059] ${
                       isActive
                         ? 'bg-[#141210] border border-[#c5a059]/40 shadow-[0_4px_15px_rgba(0,0,0,0.4)]'
                         : 'bg-[#0e0c0a]/60 border border-white/5 opacity-80'

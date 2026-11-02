@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useReducedMotion } from 'motion/react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -15,8 +16,16 @@ export { gsap, ScrollTrigger };
  */
 export function useGsapScrollTrigger(dependencies: any[] = []) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
+    if (prefersReducedMotion) {
+      gsap.set('.gsap-section, .gsap-reveal, .gsap-stagger-item, .gsap-card-reveal', {
+        clearProps: 'all'
+      });
+      return;
+    }
+
     // GSAP context for safe React cleanup
     const ctx = gsap.context(() => {
       // 1. General Section Reveals (smooth scroll fade-up)
@@ -180,7 +189,7 @@ export function useGsapScrollTrigger(dependencies: any[] = []) {
       clearTimeout(timer);
       ctx.revert();
     };
-  }, dependencies);
+  }, [prefersReducedMotion, ...dependencies]);
 
   return containerRef;
 }
@@ -190,10 +199,11 @@ export function useGsapScrollTrigger(dependencies: any[] = []) {
  */
 export function useGsapCardHover<T extends HTMLElement = HTMLDivElement>() {
   const cardRef = useRef<T | null>(null);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const card = cardRef.current;
-    if (!card) return;
+    if (!card || prefersReducedMotion) return;
 
     let bounds: DOMRect;
 
@@ -246,7 +256,7 @@ export function useGsapCardHover<T extends HTMLElement = HTMLDivElement>() {
       card.removeEventListener('mouseleave', onMouseLeave);
       gsap.killTweensOf(card);
     };
-  }, []);
+  }, [prefersReducedMotion]);
 
   return cardRef;
 }
