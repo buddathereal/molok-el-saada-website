@@ -71,7 +71,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             </span>
           </motion.div>
 
-          {/* 3. Main Arabic Heading: رحلتك نحو الكمال */}
+          {/* 3. Main Arabic Heading: direct Egyptian CTA */}
           <motion.h2
             initial={{ opacity: 0, y: 8 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -79,7 +79,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             transition={{ duration: 0.6, delay: 0.15 }}
             className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-black text-white font-header mb-3 tracking-tight leading-tight drop-shadow-md relative z-10"
           >
-            رحلتك نحو الكمال
+            قولنا مناسبتك إمتى وفين
           </motion.h2>
 
           {/* 4. Supporting Text */}
@@ -90,7 +90,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-zinc-300 text-xs sm:text-sm md:text-base font-medium max-w-lg mx-auto mb-8 sm:mb-10 relative z-10 leading-relaxed"
           >
-            خلّينا نخطط ليومك المميز بأجمل التفاصيل
+            وإحنا هنجهزلك كوتيشن مناسب لتفاصيل مناسبتك
           </motion.p>
 
           {/* 5. The 3 Booking Steps (Refined, peaceful timeline design) */}
