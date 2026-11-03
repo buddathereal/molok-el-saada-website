@@ -127,6 +127,34 @@ export const SERVICE_COSTS = [
   { label: 'فرد كامل جولد', price: '70 LE' }
 ];
 
+export const SERVICE_SECTIONS = [
+  {
+    name: 'طاقم الضيافة',
+    items: ['ويترز شباب', 'ويترز بنات', 'شيف', 'باريستا']
+  },
+  {
+    name: 'الأزياء والاستقبال',
+    items: [
+      'شب زي عثماني أو خليجي',
+      'بنت زي خليجي',
+      'هاوس شباب',
+      'هاوس بنات',
+      'شب Ashr / اشر',
+      'بنت Ashr / اشر',
+      'بنت منع تصوير',
+      'خدمة منع التصوير (جراب)'
+    ]
+  },
+  {
+    name: 'باقات التجهيز الملكية',
+    items: ['ROYAL Setup', 'LIGHT ROYAL Setup']
+  },
+  {
+    name: 'أفراد الضيافة',
+    items: ['فرد عادي سيلفر', 'فرد عادي جولد', 'فرد كامل سيلفر', 'فرد كامل جولد']
+  }
+];
+
 // --- NEW EQUIPMENT DATA ---
 
 const HOT_IMAGES = [
@@ -781,17 +809,4 @@ export const EQUIPMENT_DATA: EquipmentCategory[] = [
       }
     ]
   },
-  {
-    id: 'services',
-    name: 'الخدمات',
-    description: 'طاقم عمل محترف لخدمتكم',
-    icon: '🤵',
-    displayMode: 'grid',
-    items: [
-      { id: 'srv-1', name: 'ويترز شباب', price: 600 },
-      { id: 'srv-2', name: 'ويترز بنات', price: 700 },
-      { id: 'srv-3', name: 'باريستا', price: 800 },
-      { id: 'srv-4', name: 'شيف', price: 1000 }
-    ]
-  }
 ];

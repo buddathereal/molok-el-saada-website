@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useReducer } from 'react';
 import { motion, AnimatePresence, MotionConfig, useReducedMotion, useScroll, useTransform } from 'motion/react';
 import { X, ChevronRight, ArrowRight, ArrowLeft, ShoppingBasket, Sparkles, Award, Crown, Compass, Gem } from 'lucide-react';
-import { BEVERAGES_MENU, SOFT_DRINKS, SERVICE_COSTS, EQUIPMENT_DATA, BEVERAGES_CATEGORIES } from './data';
+import { BEVERAGES_MENU, SOFT_DRINKS, SERVICE_COSTS, SERVICE_SECTIONS, EQUIPMENT_DATA, BEVERAGES_CATEGORIES } from './data';
 import type { MenuPackage, EquipmentCategory, EquipmentItem } from './types';
 import { useGsapScrollTrigger } from './useGsap';
 import { BookingSection } from './BookingSection';
@@ -64,9 +64,9 @@ const cloudinarySrcSet = (url: string) =>
 
 const SERVICE_CATEGORY_PACKAGE: MenuPackage = {
   id: 'srv-cat',
-  title: 'طاقم الخدمة والضيافة',
+  title: 'خدمات الضيافة الملكية',
   price: -1,
-  sections: [{ name: 'طاقم العمل', items: SERVICE_COSTS.map((service) => service.label) }]
+  sections: SERVICE_SECTIONS
 };
 
 const PORTAL_CATEGORIES: Array<{
