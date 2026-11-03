@@ -47,7 +47,7 @@ const EMPTY_CUSTOMER_INFO = {
 
 const NAV_ITEMS: Array<{ v: AppView; l: string }> = [
   { v: 'home', l: 'الرئيسية' },
-  { v: 'portal', l: 'المنيو' },
+  { v: 'portal', l: 'الضيافة' },
   { v: 'tools', l: 'المعدات' },
   { v: 'contact', l: 'تواصل معنا' }
 ];
@@ -320,7 +320,7 @@ const FloatingCart: React.FC<{
                           animate={{ opacity: 1, x: 0 }}
                           className="space-y-3"
                         >
-                          <h6 className="text-[9px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">المنيو المختار</h6>
+                          <h6 className="text-[9px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">الضيافة المختارة</h6>
                           <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col gap-4 hover:border-royal-gold/20 transition-colors">
                             <div className="flex items-center justify-between flex-row-reverse gap-4">
                               <div className="flex-1 text-right">
@@ -621,7 +621,7 @@ const FloatingCart: React.FC<{
                       <ShoppingBasket className="w-10 h-10 opacity-20" />
                     </motion.div>
                     <p className="text-zinc-500 text-xs font-bold">السلة فارغة حالياً</p>
-                    <button onClick={() => { setIsOpen(false); navigateTo('portal'); }} className="text-[#c5a059] text-[10px] font-black uppercase tracking-widest underline">تصفح القوائم</button>
+                    <button onClick={() => { setIsOpen(false); navigateTo('portal'); }} className="text-[#c5a059] text-[10px] font-black uppercase tracking-widest underline">تصفح الضيافة</button>
                   </div>
                 )}
               </div>
@@ -890,9 +890,9 @@ const App: React.FC = () => {
   const pageTitle = view === 'home'
     ? 'ملوك السعادة'
     : view === 'portal'
-      ? 'القوائم'
+      ? 'الضيافة'
       : view === 'category'
-        ? PORTAL_CATEGORIES.find((category) => category.id === categoryId)?.displayName ?? 'القائمة'
+        ? PORTAL_CATEGORIES.find((category) => category.id === categoryId)?.displayName ?? 'الضيافة'
         : view === 'tools'
           ? activeEquipmentCat?.name ?? 'المعدات'
           : 'تواصل معنا';
@@ -1558,7 +1558,7 @@ const App: React.FC = () => {
                         onClick={() => navigateTo('portal')}
                         className="royal-btn-primary w-full sm:w-auto flex-1 py-4 px-8 text-xs md:text-sm font-black uppercase tracking-[0.15em] flex items-center justify-center gap-3 select-none"
                       >
-                        <span>استعراض القوائم</span>
+                        <span>استعراض الضيافة</span>
                         <ArrowRight className="w-4 h-4 rotate-180 text-black" />
                       </motion.button>
                       
