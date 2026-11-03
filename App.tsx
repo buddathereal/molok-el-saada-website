@@ -1009,6 +1009,7 @@ const App: React.FC = () => {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [customerFormMode, setCustomerFormMode] = useState<'appointment' | 'confirmation'>('confirmation');
   const [orderContext, dispatchOrderContext] = useReducer(orderContextReducer, initialOrderContext);
   const pendingPkg = orderContext.kind === 'package-inquiry' ? orderContext.pendingPackage : null;
   const pendingEquipment = orderContext.kind === 'equipment-inquiry' ? orderContext.pendingEquipment : null;
@@ -1108,10 +1109,11 @@ const App: React.FC = () => {
     return calculateOrderTotal(lines);
   };
 
-  const handleStartBooking = () => {
+  const handleStartBooking = (mode: 'appointment' | 'confirmation' = 'confirmation') => {
     dispatchOrderContext({ type: 'start-booking' });
     setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
     setOrderNotice('');
+    setCustomerFormMode(mode);
     setIsCustomerModalOpen(true);
   };
 
@@ -1124,7 +1126,7 @@ const App: React.FC = () => {
       setOrderNotice('السلة فارغة؛ اختر باقة أو صنفاً قبل متابعة الطلب.');
       return;
     }
-    handleStartBooking();
+    handleStartBooking('confirmation');
   };
 
   const handleEquipmentOnlyOrder = () => {
@@ -1136,21 +1138,26 @@ const App: React.FC = () => {
     }
     dispatchOrderContext({ type: 'start-equipment-inquiry', items: null });
     setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
+    setCustomerFormMode('confirmation');
     setIsCustomerModalOpen(true);
   };
 
   const handleSharePackage = (pkg: MenuPackage) => {
     dispatchOrderContext({ type: 'start-package-inquiry', package: pkg });
     setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
+    setCustomerFormMode('confirmation');
     setIsCustomerModalOpen(true);
   };
 
   const confirmAndSendOrder = () => {
-    if (Object.keys(validateCustomerInfo(customerInfo)).length > 0) return;
+    if (Object.keys(validateCustomerInfo(customerInfo, customerFormMode === 'confirmation')).length > 0) return;
 
+    const isAppointment = customerFormMode === 'appointment';
     const isPackageInquiry = orderContext.kind === 'package-inquiry';
     const isEquipmentInquiry = orderContext.kind === 'equipment-inquiry';
-    const header = isPackageInquiry
+    const header = isAppointment
+      ? '*طلب حجز موعد وتجهيز كوتيشن من ملوك السعادة*'
+      : isPackageInquiry
       ? '*استفسار عن باقة من ملوك السعادة*'
       : isEquipmentInquiry
         ? '*طلب حجز معدات من ملوك السعادة*'
@@ -1181,6 +1188,9 @@ const App: React.FC = () => {
       if (summary.total > 0) {
         sections.push(`*إجمالي المعدات ذات السعر المدرج:* ${summary.total.toLocaleString()} ج.م`);
       }
+    } else if (isAppointment) {
+      sections.push(`*نوع الطلب:* حجز موعد وتجهيز كوتيشن`);
+      sections.push(`*العدد المتوقع:* ${clampGuestCount(calcPax)} فرد`);
     } else {
       const pkgToUse = selectedPkg;
       if (pkgToUse) {
@@ -1274,6 +1284,7 @@ const App: React.FC = () => {
     setIsCustomerModalOpen(false);
     dispatchOrderContext({ type: 'reset' });
     setCustomerInfo({ ...EMPTY_CUSTOMER_INFO });
+    setCustomerFormMode('confirmation');
   };
 
   const handleShareEquipment = (items: EquipmentItem | EquipmentItem[]) => {
@@ -1600,7 +1611,7 @@ const App: React.FC = () => {
               <div className="relative z-10">
                 {/* Redesigned Royal Booking/Reservation Section */}
                 <BookingSection 
-                  onBookNow={() => setIsCustomerModalOpen(true)}
+                  onBookNow={() => handleStartBooking('appointment')}
                   onBrowseEquipment={() => navigateTo('tools', { activeEquipmentCatId: null })}
                 />
 
@@ -2599,6 +2610,7 @@ const App: React.FC = () => {
             onConfirm={confirmAndSendOrder}
             info={customerInfo}
             setInfo={setCustomerInfo}
+            mode={customerFormMode}
           />
         </React.Suspense>
       )}

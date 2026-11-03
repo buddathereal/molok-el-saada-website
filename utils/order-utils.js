@@ -118,8 +118,8 @@ export function buildEquipmentOrderSummary(items, quantities) {
   return { lines: lines.join('\n'), total, unpricedCount, itemCount: uniqueItems.length };
 }
 
-/** @param {{name: string, phone: string, eventDate: string, agreedToDeposit: boolean}} info */
-export function validateCustomerInfo(info) {
+/** @param {{name: string, phone: string, eventDate: string, agreedToDeposit: boolean}} info @param {boolean} [requireDeposit=true] */
+export function validateCustomerInfo(info, requireDeposit = true) {
   /** @type {Partial<Record<'name' | 'phone' | 'eventDate' | 'agreedToDeposit', string>>} */
   const errors = {};
   const name = String(info.name || '').trim().replace(/\s+/g, ' ');
@@ -133,7 +133,7 @@ export function validateCustomerInfo(info) {
   if (!String(info.eventDate || '').trim()) {
     errors.eventDate = 'موعد المناسبة مطلوب.';
   }
-  if (!info.agreedToDeposit) {
+  if (requireDeposit && !info.agreedToDeposit) {
     errors.agreedToDeposit = 'يرجى تأكيد الموافقة على العربون للمتابعة.';
   }
 
