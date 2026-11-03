@@ -292,14 +292,26 @@ const FloatingCart: React.FC<{
               <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                 <div className="flex justify-between items-center mb-2 flex-row-reverse">
                   <label htmlFor="cart-pax" className="text-[10px] font-black text-royal-gold uppercase tracking-widest">عدد الأفراد (PAX)</label>
-                  <span className="text-white font-black font-numbers text-lg">{calcPax}</span>
+                  <div className="flex items-center gap-2 flex-row-reverse">
+                    <input
+                      aria-label="عدد الأفراد في السلة"
+                      type="number"
+                      min="25"
+                      max="1000"
+                      step="1"
+                      value={calcPax}
+                      onChange={(e) => onPaxChange(clampGuestCount(e.target.value))}
+                      className="w-20 min-h-10 bg-white/5 border border-royal-gold/30 rounded-lg px-2 text-center text-white font-black font-numbers text-lg focus:border-royal-gold outline-none"
+                    />
+                    <span className="text-zinc-500 text-[10px] font-bold">فرد</span>
+                  </div>
                 </div>
                 <input 
                   id="cart-pax"
                   type="range" 
                   min="25" 
                   max="1000" 
-                  step="5"
+                  step="1"
                   value={calcPax} 
                   onChange={(e) => onPaxChange(parseInt(e.target.value))}
                   className="w-full accent-royal-gold h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
@@ -1966,18 +1978,18 @@ const App: React.FC = () => {
                   className="mb-10 glass-card p-8 rounded-[2.5rem] border border-[#c5a059]/20 card-shadow text-right max-w-2xl mx-auto"
                 >
                   <div className="flex justify-between items-center mb-6 flex-row-reverse">
-                    <h4 id="beverage-pax-label" className="text-white font-black font-header">عدد الأفراد (PAX)</h4>
-                    <div className="flex items-center gap-4 flex-row-reverse">
-                      <motion.span 
-                        key={calcPax}
-                        initial={{ scale: 1.2, color: "#c5a059" }}
-                        animate={{ scale: 1, color: "#c5a059" }}
-                        className="text-royal-gold font-numbers text-3xl font-black"
-                        aria-live="polite"
-                        aria-atomic="true"
-                      >
-                        {calcPax}
-                      </motion.span>
+                    <label htmlFor="beverage-pax" id="beverage-pax-label" className="text-white font-black font-header">عدد الأفراد (PAX)</label>
+                    <div className="flex items-center gap-2 flex-row-reverse">
+                      <input
+                        aria-label="عدد الأفراد في الضيافة"
+                        type="number"
+                        min="25"
+                        max="1000"
+                        step="1"
+                        value={calcPax}
+                        onChange={e => setCalcPax(clampGuestCount(e.target.value))}
+                        className="w-24 min-h-12 bg-white/5 border border-royal-gold/40 rounded-xl px-2 text-center text-royal-gold font-numbers text-2xl font-black focus:border-royal-gold outline-none"
+                      />
                       <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">فرد</span>
                     </div>
                   </div>
@@ -1988,7 +2000,7 @@ const App: React.FC = () => {
                     type="range" 
                     min="25" 
                     max="1000" 
-                    step="5" 
+                    step="1"
                     value={calcPax} 
                     onChange={e => setCalcPax(clampGuestCount(e.target.value))} 
                     className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#c5a059]" 
