@@ -225,7 +225,7 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
             <div className="p-5 sm:p-6 border-b border-[#c5a059]/15 flex justify-between items-center gap-4">
               <div>
                 <h2 id="customer-dialog-title" className="text-white font-black font-header text-xl">{isAppointment ? 'احجز موعدك' : 'تأكيد بيانات الحجز'}</h2>
-                <p id="customer-dialog-description" className="text-zinc-300 text-xs mt-1">{isAppointment ? 'قولنا مناسبتك إمتى وفين، وهنجهزلك كوتيشن مناسب.' : 'املأ البيانات المطلوبة، ثم راجع الرسالة قبل إرسالها من WhatsApp.'}</p>
+                <p id="customer-dialog-description" className="text-zinc-300 text-xs mt-1">{isAppointment ? 'قولنا مناسبتك إمتى وفين، حتى لو الموعد قريب — إحنا أسرع تنفيذ.' : 'املأ البيانات المطلوبة، ثم راجع الرسالة قبل إرسالها من WhatsApp.'}</p>
               </div>
               <button
                 type="button"
