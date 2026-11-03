@@ -225,7 +225,7 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
             <div className="p-5 sm:p-6 border-b border-[#c5a059]/15 flex justify-between items-center gap-4">
               <div>
                 <h2 id="customer-dialog-title" className="text-white font-black font-header text-xl">{isAppointment ? 'احجز موعدك' : 'تأكيد بيانات الحجز'}</h2>
-                <p id="customer-dialog-description" className="text-zinc-300 text-xs mt-1">{isAppointment ? 'قولنا مناسبتك إمتى وفين، حتى لو الموعد قريب — إحنا أسرع تنفيذ.' : 'املأ البيانات المطلوبة، ثم راجع الرسالة قبل إرسالها من WhatsApp.'}</p>
+                <p id="customer-dialog-description" className="text-zinc-300 text-xs mt-1">{isAppointment ? 'قولنا مناسبتك إمتى وفين، وهنجهزلك كوتيشن مناسب.' : 'املأ البيانات المطلوبة، ثم راجع الرسالة قبل إرسالها من WhatsApp.'}</p>
               </div>
               <button
                 type="button"
@@ -337,7 +337,7 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
               </div>
 
               <div className="p-4 rounded-xl bg-white/[0.04] border border-white/10 text-zinc-200 text-sm leading-relaxed">
-                {isAppointment ? 'هنجهزلك رسالة استفسار بالبيانات الأساسية عشان فريقنا يراجع تفاصيل مناسبتك ويجهزلك الكوتيشن. الرسالة هتتفتح في WhatsApp ومش هتتبعت تلقائياً؛ راجعها وابعتها بنفسك.' : 'سيُجهّز الموقع رسالة إلى رقم ملوك السعادة تحتوي الاسم ورقم الهاتف وموعد المناسبة والاختيارات وأسعارها وموافقتك على العربون؛ ويُضاف المكان والملاحظات إذا أدخلتهما. لا يُطلب موقعك إلا بعد ضغط زر «استخدم موقعي الحالي»، ومشاركته اختيارية. تُفتح الرسالة في WhatsApp ولا تُرسل إلى النشاط التجاري تلقائياً؛ راجعها ثم أرسلها بنفسك. يخضع تعامل WhatsApp مع الرسالة لسياساته.'}
+                {isAppointment ? 'حتى لو المناسبة قربت أو الطلب متأخر، إحنا أسرع تنفيذ. هنجهزلك رسالة استفسار بالبيانات الأساسية عشان فريقنا يراجع تفاصيل مناسبتك ويجهزلك الكوتيشن. الرسالة هتتفتح في WhatsApp ومش هتتبعت تلقائياً؛ راجعها وابعتها بنفسك.' : 'سيُجهّز الموقع رسالة إلى رقم ملوك السعادة تحتوي الاسم ورقم الهاتف وموعد المناسبة والاختيارات وأسعارها وموافقتك على العربون؛ ويُضاف المكان والملاحظات إذا أدخلتهما. لا يُطلب موقعك إلا بعد ضغط زر «استخدم موقعي الحالي»، ومشاركته اختيارية. تُفتح الرسالة في WhatsApp ولا تُرسل إلى النشاط التجاري تلقائياً؛ راجعها ثم أرسلها بنفسك. يخضع تعامل WhatsApp مع الرسالة لسياساته.'}
               </div>
 
               {!isAppointment && <div className="pt-2 border-t border-white/10">

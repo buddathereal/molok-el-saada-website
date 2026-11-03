@@ -79,7 +79,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             transition={{ duration: 0.6, delay: 0.15 }}
             className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-black text-white font-header mb-3 tracking-tight leading-tight drop-shadow-md relative z-10"
           >
-            قولنا مناسبتك إمتى وفين — حتى لو الموعد قريب، إحنا أسرع تنفيذ
+            قولنا مناسبتك إمتى وفين
           </motion.h2>
 
           {/* 4. Supporting Text */}
@@ -90,7 +90,7 @@ export const BookingSection: React.FC<BookingSectionProps> = ({
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-zinc-300 text-xs sm:text-sm md:text-base font-medium max-w-lg mx-auto mb-8 sm:mb-10 relative z-10 leading-relaxed"
           >
-            وإحنا هنجهزلك كوتيشن مناسب لتفاصيل مناسبتك بأسرع وقت
+            وإحنا هنجهزلك كوتيشن مناسب لتفاصيل مناسبتك
           </motion.p>
 
           {/* 5. The 3 Booking Steps (Refined, peaceful timeline design) */}
