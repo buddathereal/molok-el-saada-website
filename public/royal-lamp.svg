@@ -2,45 +2,45 @@
   <defs>
     <!-- 3D Brushed Metallic Gold Horizontal Gradient -->
     <linearGradient id="goldMetal" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#5c430d" />
-      <stop offset="18%" stop-color="#b88e3d" />
+      <stop offset="0%" stop-color="#544323" />
+      <stop offset="18%" stop-color="#a7874d" />
       <stop offset="38%" stop-color="#f7e1a0" />
-      <stop offset="50%" stop-color="#fff4cc" />
-      <stop offset="65%" stop-color="#d4af37" />
-      <stop offset="85%" stop-color="#8b6914" />
-      <stop offset="100%" stop-color="#4a3508" />
+      <stop offset="50%" stop-color="#f7e1a0" />
+      <stop offset="65%" stop-color="#c5a059" />
+      <stop offset="85%" stop-color="#80663a" />
+      <stop offset="100%" stop-color="#40331e" />
     </linearGradient>
 
     <!-- Dome Radial Metallic Shading -->
     <radialGradient id="domeGold" cx="42%" cy="32%" r="68%">
-      <stop offset="0%" stop-color="#fff3c4" />
-      <stop offset="26%" stop-color="#e5c16c" />
-      <stop offset="58%" stop-color="#b38728" />
-      <stop offset="84%" stop-color="#6e5010" />
-      <stop offset="100%" stop-color="#3a2805" />
+      <stop offset="0%" stop-color="#f7e1a0" />
+      <stop offset="26%" stop-color="#c5a059" />
+      <stop offset="58%" stop-color="#9c7d46" />
+      <stop offset="84%" stop-color="#67512f" />
+      <stop offset="100%" stop-color="#332817" />
     </radialGradient>
 
     <!-- Inner Warm Lit Cavity -->
     <radialGradient id="innerCavity" cx="50%" cy="35%" r="65%">
       <stop offset="0%" stop-color="#fffdf5" />
-      <stop offset="28%" stop-color="#ffe599" />
-      <stop offset="62%" stop-color="#d49b35" />
-      <stop offset="88%" stop-color="#6b470e" />
-      <stop offset="100%" stop-color="#2b1b04" />
+      <stop offset="28%" stop-color="#f1dba2" />
+      <stop offset="62%" stop-color="#b28d50" />
+      <stop offset="88%" stop-color="#6b5330" />
+      <stop offset="100%" stop-color="#292014" />
     </radialGradient>
 
     <!-- Ambient Bulb Halo -->
     <radialGradient id="bulbGlow" cx="50%" cy="50%" r="50%">
       <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
-      <stop offset="30%" stop-color="#fff0b8" stop-opacity="0.92" />
+      <stop offset="30%" stop-color="#f7e1a0" stop-opacity="0.92" />
       <stop offset="65%" stop-color="#c5a059" stop-opacity="0.42" />
       <stop offset="100%" stop-color="#c5a059" stop-opacity="0" />
     </radialGradient>
 
     <linearGradient id="chainGold" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#6e5010" />
+      <stop offset="0%" stop-color="#67512f" />
       <stop offset="50%" stop-color="#f7e1a0" />
-      <stop offset="100%" stop-color="#5c430d" />
+      <stop offset="100%" stop-color="#544323" />
     </linearGradient>
   </defs>
 
@@ -72,7 +72,7 @@
   <path d="M40 264 C42 212 82 184 140 184 C198 184 238 212 240 264 Z" fill="url(#domeGold)" />
 
   <!-- Subtle Engraved Royal Ribs & Filigree Band on Dome -->
-  <g stroke="#fff3c4" stroke-opacity="0.28" stroke-width="1.2" fill="none">
+  <g stroke="#f7e1a0" stroke-opacity="0.28" stroke-width="1.2" fill="none">
     <path d="M140 184 V262" />
     <path d="M140 184 C115 198 98 225 94 262" />
     <path d="M140 184 C165 198 182 225 186 262" />
@@ -82,7 +82,7 @@
 
   <!-- Ornate Trim Band Around Lower Dome -->
   <rect x="34" y="260" width="212" height="9" rx="4.5" fill="url(#goldMetal)" />
-  <rect x="28" y="268" width="224" height="5" rx="2.5" fill="#5c430d" />
+  <rect x="28" y="268" width="224" height="5" rx="2.5" fill="#544323" />
 
   <!-- Inner Illuminated Underside Opening (Perspective Ellipse) -->
   <ellipse cx="140" cy="274" rx="108" ry="20" fill="url(#goldMetal)" />

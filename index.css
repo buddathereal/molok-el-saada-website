@@ -43,7 +43,7 @@
     line-height: 1.65;
     -webkit-text-size-adjust: 100%;
     touch-action: manipulation;
-    scroll-behavior: smooth;
+    scroll-behavior: auto;
   }
 
   body {
@@ -420,5 +420,18 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Expensive animated blurs can make touch scrolling stutter on mobile. */
+@media (hover: none), (pointer: coarse) {
+  .animate-float-glow-1, .animate-float-glow-2 {
+    animation: none;
+  }
+  .ambient-background > div {
+    filter: none;
+  }
+  .grain-overlay {
+    display: none;
   }
 }

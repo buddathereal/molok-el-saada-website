@@ -19,6 +19,7 @@ import {
   validateCustomerInfo
 } from './utils/order-utils.js';
 import { normalizeNavigationHistoryState } from './utils/navigation-history.js';
+import { shouldPlayBackgroundVideo } from './utils/media-playback.js';
 
 // --- CONFIGURATION ---
 const USER_LOGO_URL = "https://i.postimg.cc/xj33dFYd/Picsart-26-01-31-03-15-31-627.png";
@@ -147,6 +148,7 @@ const BrandLogo: React.FC<{ className?: string; showGlow?: boolean; imgStyle?: R
 const LazyFooterVideo: React.FC = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const isNearViewport = useRef(false);
   const prefersReducedMotion = useReducedMotion();
   const [shouldLoadVideo, setShouldLoadVideo] = useState(false);
   const [saveDataEnabled] = useState(() => {
@@ -160,32 +162,44 @@ const LazyFooterVideo: React.FC = () => {
     const node = containerRef.current;
     if (!node || typeof IntersectionObserver === 'undefined') return;
 
+    const syncPlayback = () => {
+      const video = videoRef.current;
+      if (!video) return;
+      if (shouldPlayBackgroundVideo(isNearViewport.current, !document.hidden)) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    };
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0];
         if (!entry) return;
-        if (entry.isIntersecting) {
-          setShouldLoadVideo(true);
-          videoRef.current?.play().catch(() => {});
-        } else {
-          videoRef.current?.pause();
-        }
+        isNearViewport.current = entry.isIntersecting;
+        if (entry.isIntersecting) setShouldLoadVideo(true);
+        syncPlayback();
       },
       { rootMargin: '350px 0px', threshold: 0.01 }
     );
 
     observer.observe(node);
-    return () => observer.disconnect();
+    document.addEventListener('visibilitychange', syncPlayback);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', syncPlayback);
+      isNearViewport.current = false;
+      videoRef.current?.pause();
+    };
   }, [prefersReducedMotion, saveDataEnabled]);
 
   useEffect(() => {
-    if (shouldLoadVideo && videoRef.current) {
+    if (shouldLoadVideo && videoRef.current && shouldPlayBackgroundVideo(isNearViewport.current, !document.hidden)) {
       videoRef.current.play().catch(() => {});
     }
   }, [shouldLoadVideo]);
 
   return (
-    <div ref={containerRef} aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none bg-[#050505]">
+    <div ref={containerRef} aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-[#050505]">
       <img
         src={FOOTER_VIDEO_POSTER}
         alt=""
@@ -197,20 +211,19 @@ const LazyFooterVideo: React.FC = () => {
         onError={(e) => {
           e.currentTarget.style.display = 'none';
         }}
-        className="absolute inset-0 w-full h-full object-cover object-center scale-105 opacity-75"
-        style={{ filter: 'blur(0.5px) brightness(0.62) contrast(1.08)' }}
+        className="absolute inset-0 w-full h-full object-cover object-center"
+        style={{ filter: 'brightness(0.65)' }}
       />
       {shouldLoadVideo && !prefersReducedMotion && !saveDataEnabled && (
         <video
           ref={videoRef}
-          autoPlay
           loop
           muted
           playsInline
           preload="metadata"
           poster={FOOTER_VIDEO_POSTER}
-          className="relative z-[1] w-full h-full object-cover object-center scale-105"
-          style={{ filter: 'blur(0.5px) brightness(0.65) contrast(1.1) saturate(1.05)' }}
+          className="relative z-[1] w-full h-full object-cover object-center"
+          style={{ filter: 'brightness(0.65)' }}
         >
           <source src={FOOTER_VIDEO_WEBM} type="video/webm" />
           <source src={FOOTER_VIDEO_MP4} type="video/mp4" />
@@ -1070,7 +1083,7 @@ const App: React.FC = () => {
           : 'تواصل معنا';
 
   // GSAP ScrollTrigger & Card Hover animations initializer
-  useGsapScrollTrigger([view, activeCategory, activeEquipmentCat, categoryId]);
+  useGsapScrollTrigger([view, categoryId, activeEquipmentCat?.id]);
 
   useEffect(() => {
     document.title = view === 'home'
@@ -1078,7 +1091,6 @@ const App: React.FC = () => {
       : `${pageTitle} | ملوك السعادة`;
   }, [pageTitle, view]);
 
-  const prefersReducedMotion = useReducedMotion() === true;
 
   // Scroll visibility handling - smooth hide on scroll down
   useEffect(() => {
@@ -1195,8 +1207,8 @@ const App: React.FC = () => {
 
   // Scroll to top on view change
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
-  }, [view, activeCategory, activeEquipmentCat, prefersReducedMotion]);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [view, categoryId, activeEquipmentCat?.id]);
 
   useEffect(() => {
     setSelectedBeverages([]);
@@ -1211,7 +1223,6 @@ const App: React.FC = () => {
 
   const openCategory = (id: string) => {
     navigateTo('category', { categoryId: id });
-    window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
   };
 
   const allPackages = useMemo(() => [...BEVERAGES_MENU], []);
@@ -1546,7 +1557,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#050505] text-zinc-200 overflow-x-hidden relative">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:right-3 focus:z-[300] focus:bg-[#f7e1a0] focus:text-black focus:px-4 focus:py-3 focus:rounded-xl">تخطي إلى المحتوى</a>
       {/* Smooth Animated Luxury Ambient Gradient Backgrounds & Custom Drawings */}
-      <div aria-hidden="true" className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+      <div aria-hidden="true" className="ambient-background fixed inset-0 overflow-hidden pointer-events-none z-0">
         {/* Soft floating gold and amber light emitters */}
         <div className="absolute top-[15%] left-[-15%] w-[55vw] h-[55vw] md:w-[35vw] md:h-[35vw] bg-[radial-gradient(circle,rgba(197,160,89,0.06)_0%,transparent_70%)] blur-[100px] rounded-full animate-float-glow-1" />
         <div className="absolute top-[50%] right-[-10%] w-[60vw] h-[60vw] md:w-[40vw] md:h-[40vw] bg-[radial-gradient(circle,rgba(197,160,89,0.05)_0%,transparent_70%)] blur-[130px] rounded-full animate-float-glow-2" />
@@ -1662,6 +1673,16 @@ const App: React.FC = () => {
                       aria-hidden="true"
                       className="relative z-10 w-[105px] sm:w-[130px] md:w-[160px] pointer-events-none select-none shrink-0"
                     >
+                      {/* Continue the suspension from the top of the hero, behind the navigation. */}
+                      <svg className="absolute bottom-full left-1/2 -translate-x-1/2 w-3 h-20 sm:h-24" viewBox="0 0 12 96" preserveAspectRatio="none" fill="none">
+                        <defs>
+                          <pattern id="hero-chain-links" width="12" height="16" patternUnits="userSpaceOnUse">
+                            <rect x="3" y="1" width="6" height="12" rx="3" stroke="#c5a059" strokeWidth="1.5" />
+                            <path d="M6 11v5" stroke="#8b6914" strokeWidth="1.5" />
+                          </pattern>
+                        </defs>
+                        <rect width="12" height="96" fill="url(#hero-chain-links)" />
+                      </svg>
                       <img
                         src={LOCAL_LAMP_ASSET}
                         alt=""
@@ -2861,10 +2882,10 @@ const App: React.FC = () => {
          {/* Lazy-loaded Background Video with instant Poster & Data-Saver / Reduced-Motion protection */}
          <LazyFooterVideo />
 
-         {/* Cinematic gradient blend connecting seamlessly with the page */}
-         <div className="absolute inset-0 bg-gradient-to-b from-[#050505] via-black/45 to-[#020202] pointer-events-none" />
-         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.1)_0%,rgba(2,2,2,0.75)_100%)] pointer-events-none" />
-         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] max-w-full h-[260px] bg-royal-gold/8 blur-[130px] rounded-full pointer-events-none"></div>
+         {/* Subtle center shading with a separate vignette and soft top/bottom fades. */}
+         <div aria-hidden="true" className="absolute inset-0 z-[1] pointer-events-none" style={{
+           background: 'linear-gradient(to bottom, rgba(5,5,5,0.85) 0%, transparent 25%, transparent 75%, rgba(2,2,2,0.85) 100%), radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.55) 100%), rgba(0,0,0,0.4)'
+         }} />
 
          <div className="royal-container relative z-10 flex flex-col items-center">
            <div className="flex justify-center items-center mb-5">
