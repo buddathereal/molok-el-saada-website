@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { EquipmentItem } from '../types';
 import { cloudinarySrcSet, handleSafeImageError, LOCAL_IMAGE_FALLBACK, optimizeCloudinaryImage } from '../utils/images';
 import { ChafingDishIcon, CheckIcon, WhatsAppIcon } from './Icons';
+import { EquipmentQuantityInput } from './EquipmentQuantityInput';
 
 export const EquipmentCard: React.FC<{
   item: EquipmentItem;
@@ -139,12 +140,10 @@ export const EquipmentCard: React.FC<{
                           >
                             -
                           </button>
-                          <input
-                            type="number"
-                            min="1"
+                          <EquipmentQuantityInput
+                            name={opt.name}
                             value={optQty}
-                            aria-label={`كمية ${opt.name}`}
-                            onChange={(e) => onQuantitySet(opt.id, parseInt(e.target.value) || 1)}
+                            onChange={(value) => onQuantitySet(opt.id, value)}
                             className="min-w-0 w-0 flex-1 h-10 sm:w-14 sm:flex-none sm:h-11 bg-white/5 border border-white/15 rounded-lg text-white text-center font-bold font-numbers text-sm focus:border-royal-gold/60 outline-none transition-colors"
                           />
                           <button
@@ -175,12 +174,10 @@ export const EquipmentCard: React.FC<{
                   >
                     -
                   </button>
-                  <input
-                    type="number"
-                    min="1"
+                  <EquipmentQuantityInput
+                    name={item.name || 'المعدة'}
                     value={quantity}
-                    aria-label={`كمية ${item.name || 'المعدة'}`}
-                    onChange={(e) => onQuantitySet(item.id, parseInt(e.target.value) || 1)}
+                    onChange={(value) => onQuantitySet(item.id, value)}
                     className="min-w-0 w-0 flex-1 h-10 sm:w-14 sm:flex-none sm:h-11 bg-white/5 border border-white/15 rounded-lg sm:rounded-xl text-white text-center font-bold font-numbers text-base focus:border-royal-gold/60 outline-none transition-colors"
                   />
                   <button
