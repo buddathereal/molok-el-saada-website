@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useReducer } from 'react';
-import { motion, AnimatePresence, MotionConfig, useReducedMotion } from 'motion/react';
-import { X, ChevronRight, ArrowRight, ArrowLeft, ShoppingBasket, Sparkles, Award, Crown, Compass, Gem } from 'lucide-react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
+import { ChevronRight, ArrowRight, ArrowLeft, ShoppingBasket, Sparkles, Award, Crown, Compass, Gem } from 'lucide-react';
 import { BEVERAGES_MENU, SOFT_DRINKS, SERVICE_COSTS, SERVICE_SECTIONS, EQUIPMENT_DATA, BEVERAGES_CATEGORIES } from './data';
 import type { MenuPackage, EquipmentCategory, EquipmentItem } from './types';
 import { useGsapScrollTrigger } from './useGsap';
@@ -19,16 +19,14 @@ import {
   validateCustomerInfo
 } from './utils/order-utils.js';
 import { normalizeNavigationHistoryState } from './utils/navigation-history.js';
-import { shouldPlayBackgroundVideo } from './utils/media-playback.js';
+import { BrandLogo, LazyFooterVideo } from './components/BrandMedia';
+import { FloatingCart } from './components/FloatingCart';
+import { EquipmentCard } from './components/EquipmentCard';
+import { ChafingDishIcon, CheckIcon, FacebookIcon, InstagramIcon, MapPinIcon, PhoneIcon, WhatsAppIcon } from './components/Icons';
+import { cloudinarySrcSet, handleSafeImageError, LOCAL_LAMP_ASSET, optimizeCloudinaryImage } from './utils/images';
+import { CART_STORAGE_KEY, readCart } from './utils/cart-storage';
 
 // --- CONFIGURATION ---
-const USER_LOGO_URL = "https://i.postimg.cc/xj33dFYd/Picsart-26-01-31-03-15-31-627.png";
-const LOCAL_LOGO_FALLBACK = "/favicon.png";
-const LOCAL_IMAGE_FALLBACK = "/image-placeholder.svg";
-const LOCAL_LAMP_ASSET = "/royal-lamp.svg";
-const FOOTER_VIDEO_POSTER = "https://res.cloudinary.com/dhktkzpap/video/upload/f_auto,q_auto,w_960,so_0/171262654_1788182400783352_jlqkjm.jpg";
-const FOOTER_VIDEO_WEBM = "https://res.cloudinary.com/dhktkzpap/video/upload/q_auto,w_960/171262654_1788182400783352_jlqkjm.webm";
-const FOOTER_VIDEO_MP4 = "https://res.cloudinary.com/dhktkzpap/video/upload/q_auto,w_960/171262654_1788182400783352_jlqkjm.mp4";
 const WHATSAPP_PHONE = "201097356529";
 const WHATSAPP_BUSINESS_LINK = "https://wa.me/201097356529";
 
@@ -59,25 +57,6 @@ const NAV_ITEMS: Array<{ v: AppView; l: string }> = [
   { v: 'contact', l: 'تواصل معنا' }
 ];
 
-const optimizeCloudinaryImage = (url: string, width: number) => {
-  if (!url || !url.includes('/image/upload/')) return url;
-  const normalized = url.replace('/image/upload/f_auto,q_auto/', '/image/upload/');
-  return normalized.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${width},c_limit/`);
-};
-
-const cloudinarySrcSet = (url: string) =>
-  url && url.includes('/image/upload/')
-    ? [480, 960, 1440].map((width) => `${optimizeCloudinaryImage(url, width)} ${width}w`).join(', ')
-    : undefined;
-
-const handleSafeImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-  const img = e.currentTarget;
-  if (img.dataset.fallbackApplied === 'true') return;
-  img.dataset.fallbackApplied = 'true';
-  img.srcset = '';
-  img.src = LOCAL_IMAGE_FALLBACK;
-};
-
 const SERVICE_CATEGORY_PACKAGE: MenuPackage = {
   id: 'srv-cat',
   title: 'خدمات الضيافة الملكية',
@@ -98,965 +77,12 @@ const PORTAL_CATEGORIES: Array<{
 
 // --- Shared Components ---
 
-const BrandLogo: React.FC<{ className?: string; showGlow?: boolean; imgStyle?: React.CSSProperties; eager?: boolean }> = ({
-  className = "w-20 h-20",
-  showGlow = true,
-  imgStyle,
-  eager = false
-}) => {
-  const prefersReducedMotion = useReducedMotion();
-  const [logoSrc, setLogoSrc] = useState<string>(USER_LOGO_URL || LOCAL_LOGO_FALLBACK);
-  const [logoFailed, setLogoFailed] = useState(false);
-
-  return (
-    <motion.div
-      animate={prefersReducedMotion ? undefined : { y: [0, -5, 0] }}
-      transition={prefersReducedMotion ? undefined : { duration: 4, repeat: Infinity, ease: "easeInOut" }}
-      className={`${className} relative flex items-center justify-center overflow-visible group transition-transform duration-700`}
-    >
-      {showGlow && (
-        <div className="absolute inset-0 bg-[#c5a059]/10 blur-[30px] rounded-full scale-150 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-      )}
-
-      {!logoFailed ? (
-        <img
-          src={logoSrc}
-          alt="شعار ملوك السعادة"
-          width={256}
-          height={256}
-          loading={eager ? "eager" : "lazy"}
-          fetchPriority={eager ? "high" : "auto"}
-          decoding="async"
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-contain relative z-10 transition-transform duration-700 group-hover:scale-110 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]"
-          onError={() => {
-            if (logoSrc !== LOCAL_LOGO_FALLBACK) {
-              setLogoSrc(LOCAL_LOGO_FALLBACK);
-            } else {
-              setLogoFailed(true);
-            }
-          }}
-          style={imgStyle}
-        />
-      ) : (
-        <span className="text-[#c5a059] font-bold text-sm sm:text-base font-header">ملوك السعادة</span>
-      )}
-    </motion.div>
-  );
-};
-
-const LazyFooterVideo: React.FC = () => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const isNearViewport = useRef(false);
-  const prefersReducedMotion = useReducedMotion();
-  const [shouldLoadVideo, setShouldLoadVideo] = useState(false);
-  const [saveDataEnabled] = useState(() => {
-    if (typeof navigator === 'undefined') return false;
-    const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-    return Boolean(conn?.saveData);
-  });
-
-  useEffect(() => {
-    if (prefersReducedMotion || saveDataEnabled) return;
-    const node = containerRef.current;
-    if (!node || typeof IntersectionObserver === 'undefined') return;
-
-    const syncPlayback = () => {
-      const video = videoRef.current;
-      if (!video) return;
-      if (shouldPlayBackgroundVideo(isNearViewport.current, !document.hidden)) {
-        video.play().catch(() => {});
-      } else {
-        video.pause();
-      }
-    };
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-        isNearViewport.current = entry.isIntersecting;
-        if (entry.isIntersecting) setShouldLoadVideo(true);
-        syncPlayback();
-      },
-      { rootMargin: '350px 0px', threshold: 0.01 }
-    );
-
-    observer.observe(node);
-    document.addEventListener('visibilitychange', syncPlayback);
-    return () => {
-      observer.disconnect();
-      document.removeEventListener('visibilitychange', syncPlayback);
-      isNearViewport.current = false;
-      videoRef.current?.pause();
-    };
-  }, [prefersReducedMotion, saveDataEnabled]);
-
-  useEffect(() => {
-    if (shouldLoadVideo && videoRef.current && shouldPlayBackgroundVideo(isNearViewport.current, !document.hidden)) {
-      videoRef.current.play().catch(() => {});
-    }
-  }, [shouldLoadVideo]);
-
-  return (
-    <div ref={containerRef} aria-hidden="true" className="absolute inset-0 z-0 overflow-hidden pointer-events-none bg-[#050505]">
-      <img
-        src={FOOTER_VIDEO_POSTER}
-        alt=""
-        width={960}
-        height={540}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        onError={(e) => {
-          e.currentTarget.style.display = 'none';
-        }}
-        className="absolute inset-0 w-full h-full object-cover object-center"
-        style={{ filter: 'brightness(0.65)' }}
-      />
-      {shouldLoadVideo && !prefersReducedMotion && !saveDataEnabled && (
-        <video
-          ref={videoRef}
-          loop
-          muted
-          playsInline
-          preload="metadata"
-          poster={FOOTER_VIDEO_POSTER}
-          className="relative z-[1] w-full h-full object-cover object-center"
-          style={{ filter: 'brightness(0.65)' }}
-        >
-          <source src={FOOTER_VIDEO_WEBM} type="video/webm" />
-          <source src={FOOTER_VIDEO_MP4} type="video/mp4" />
-        </video>
-      )}
-    </div>
-  );
-};
-
-const WhatsAppIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-  </svg>
-);
-
-const CheckIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-  </svg>
-);
-
-const InstagramIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
-    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
-    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
-  </svg>
-);
-
-const FacebookIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
-  </svg>
-);
-
-const PhoneIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-  </svg>
-);
-
-const ChafingDishIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 12h18M3 12a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4zM7 10V8a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2M12 18v2M9 20h6" />
-  </svg>
-);
-
-const MapPinIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-    <circle cx="12" cy="10" r="3"></circle>
-  </svg>
-);
-
-const FloatingCart: React.FC<{
-  selectedEquipment: string[];
-  equipmentQuantities: Record<string, number>;
-  onQuantityChange: (id: string, delta: number) => void;
-  onRemoveEquipment: (id: string) => void;
-  onShare: (items: EquipmentItem[]) => void;
-  allEquipmentItems: EquipmentItem[];
-  selectedBeverages: string[];
-  beverageQuantities: Record<string, number>;
-  onBeverageQuantityChange: (item: string, delta: number) => void;
-  onRemoveBeverage: (item: string) => void;
-  selectedDrinks: string[];
-  drinkQuantities: Record<string, number>;
-  onDrinkQuantityChange: (item: string, delta: number) => void;
-  onRemoveDrink: (item: string) => void;
-  selectedExtraServices: string[];
-  serviceQuantities: Record<string, number>;
-  onServiceQuantityChange: (item: string, delta: number) => void;
-  onRemoveService: (item: string) => void;
-  selectedPkg: MenuPackage | undefined;
-  onRemovePkg: () => void;
-  calcPax: number;
-  onPaxChange: (val: number) => void;
-  onMenuOrder: () => void;
-  totalPrice: number;
-  onClearAll: () => void;
-  isOpen: boolean;
-  setIsOpen: (val: boolean) => void;
-  onZoom: (img: string) => void;
-  navigateTo: (newView: any, extra?: any) => void;
-}> = ({
-  selectedEquipment,
-  equipmentQuantities,
-  onQuantityChange,
-  onRemoveEquipment,
-  onShare,
-  allEquipmentItems,
-  selectedBeverages,
-  beverageQuantities,
-  onBeverageQuantityChange,
-  onRemoveBeverage,
-  selectedDrinks,
-  drinkQuantities,
-  onDrinkQuantityChange,
-  onRemoveDrink,
-  selectedExtraServices,
-  serviceQuantities,
-  onServiceQuantityChange,
-  onRemoveService,
-  selectedPkg,
-  onRemovePkg,
-  calcPax,
-  onPaxChange,
-  onMenuOrder,
-  totalPrice,
-  onClearAll,
-  isOpen,
-  setIsOpen,
-  onZoom,
-  navigateTo
-}) => {
-  const [hasClosedOnce, setHasClosedOnce] = useState(false);
-
-  useEffect(() => {
-    const hasItems = selectedPkg || selectedBeverages.length > 0 || selectedDrinks.length > 0 || selectedExtraServices.length > 0 || selectedEquipment.length > 0;
-    if (hasItems && !hasClosedOnce && !isOpen) {
-      setIsOpen(true);
-    }
-  }, [selectedPkg, selectedBeverages, selectedDrinks, selectedExtraServices, selectedEquipment, hasClosedOnce, isOpen, setIsOpen]);
-
-  const selectedEquipItems = useMemo(() => {
-    return allEquipmentItems.filter(item => selectedEquipment.includes(item.id));
-  }, [selectedEquipment, allEquipmentItems]);
-
-  const hasItems = selectedEquipment.length > 0 || selectedBeverages.length > 0 || selectedPkg !== undefined || selectedDrinks.length > 0 || selectedExtraServices.length > 0;
-  const totalItemsCount = selectedEquipment.length + selectedBeverages.length + (selectedPkg ? 1 : 0) + selectedDrinks.length + selectedExtraServices.length;
-
-  const prevLength = useRef(totalItemsCount);
-  useEffect(() => {
-    if (prevLength.current === 0 && totalItemsCount > 0 && !hasClosedOnce) {
-      setIsOpen(true);
-    }
-    prevLength.current = totalItemsCount;
-  }, [totalItemsCount, hasClosedOnce]);
-
-  return (
-    <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] left-4 right-4 sm:right-auto sm:left-8 z-[100] flex justify-end pointer-events-none">
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.92, y: 30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.92, y: 30 }}
-            transition={{ type: "spring", damping: 24, stiffness: 320 }}
-            className="bg-[#0c0c0c]/95 backdrop-blur-2xl border border-[#c5a059]/30 w-full sm:w-[370px] md:w-[410px] max-h-[78dvh] sm:max-h-[650px] h-[76dvh] sm:h-[640px] rounded-3xl md:rounded-[2.25rem] shadow-[0_30px_100px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden origin-bottom-left text-right pointer-events-auto"
-          >
-            {/* Header */}
-            <div className="p-5 sm:p-6 bg-white/[0.02] border-b border-[#c5a059]/15 flex flex-col gap-4">
-              <div className="flex justify-between items-center gap-3">
-                <div className="flex items-center gap-3">
-                  <BrandLogo className="w-10 h-10 shrink-0" showGlow={false} />
-                  <div className="text-right">
-                    <h4 className="text-white text-base font-bold font-header gold-text-shimmer">
-                      سلة الطلبات
-                    </h4>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                      <span className="text-xs text-zinc-400 font-semibold">
-                        {totalItemsCount} {totalItemsCount === 1 ? 'صنف مختار' : 'أصناف مختارة'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {hasItems && (
-                    <button
-                      type="button"
-                      onClick={onClearAll}
-                      className="text-xs text-red-400 font-bold hover:text-red-300 transition-colors px-2 py-1"
-                    >
-                      مسح الكل
-                    </button>
-                  )}
-                  <button type="button" aria-label="إغلاق سلة الطلبات" onClick={() => { setIsOpen(false); setHasClosedOnce(true); }} className="w-11 h-11 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
-                    <X className="w-5 h-5 text-zinc-300" />
-                  </button>
-                </div>
-              </div>
-
-              {/* PAX Selection in Cart */}
-              <div className="bg-white/5 p-3.5 sm:p-4 rounded-2xl border border-white/10">
-                <div className="flex justify-between items-center mb-2.5 gap-3">
-                  <label htmlFor="cart-pax" className="text-xs sm:text-sm font-bold text-royal-gold">عدد الأفراد (PAX)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      aria-label="عدد الأفراد في السلة"
-                      type="number"
-                      min="25"
-                      max="1000"
-                      step="1"
-                      value={calcPax}
-                      onChange={(e) => onPaxChange(clampGuestCount(e.target.value))}
-                      className="w-20 min-h-10 bg-white/5 border border-royal-gold/30 rounded-lg px-2 text-center text-white font-bold font-numbers text-base sm:text-lg focus:border-royal-gold outline-none"
-                    />
-                    <span className="text-zinc-300 text-xs font-bold">فرد</span>
-                  </div>
-                </div>
-                <input
-                  id="cart-pax"
-                  type="range"
-                  min="25"
-                  max="1000"
-                  step="1"
-                  value={calcPax}
-                  onChange={(e) => onPaxChange(parseInt(e.target.value))}
-                  className="w-full accent-royal-gold h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="flex-1 flex flex-col p-5 sm:p-6 overflow-hidden">
-                {hasItems ? (
-                  <>
-                    <div className="flex-1 overflow-y-auto space-y-5 pl-1 custom-scrollbar">
-                      {/* Menu Package */}
-                      {selectedPkg && (
-                        <motion.div
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          className="space-y-2.5"
-                        >
-                          <h6 className="text-xs font-bold text-zinc-400 border-b border-white/10 pb-2">الضيافة المختارة</h6>
-                          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 hover:border-royal-gold/25 transition-colors">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 text-right">
-                                <h5 className="text-white text-sm font-bold mb-1 font-header">{selectedPkg.title}</h5>
-                                <div className="flex flex-col gap-1">
-                                  <p className="text-royal-gold text-xs font-bold">
-                                    {selectedPkg.perPerson ? (
-                                      <>
-                                        {selectedPkg.price} ج.م للفرد × {calcPax} فرد
-                                      </>
-                                    ) : (
-                                      <>سعر الباقة: {selectedPkg.price} ج.م</>
-                                    )}
-                                  </p>
-                                  <p className="text-white text-xs sm:text-sm font-bold">
-                                    الإجمالي: {(selectedPkg.perPerson ? selectedPkg.price * calcPax : selectedPkg.price).toLocaleString()} ج.م
-                                  </p>
-                                </div>
-                              </div>
-                              <button type="button" aria-label={`إزالة باقة ${selectedPkg.title} من السلة`} onClick={onRemovePkg} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-
-                      {/* Other Selected Items (Beverages) */}
-                      {selectedBeverages.length > 0 && (
-                        <div className="space-y-2.5">
-                          <h6 className="text-xs font-bold text-zinc-400 border-b border-white/10 pb-2">الأصناف المختارة</h6>
-                          <AnimatePresence mode="popLayout">
-                            {selectedBeverages.map((item, idx) => {
-                              const match = item.match(/—\s*(\d+)\s*ج/);
-                              const price = match ? parseInt(match[1]) : 0;
-                              const qty = beverageQuantities[item] || 1;
-                              return (
-                                <motion.div
-                                  layout
-                                  initial={{ opacity: 0, scale: 0.95 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.95 }}
-                                  key={`b-${idx}`}
-                                  className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3 group hover:border-royal-gold/30 transition-all"
-                                >
-                                  <div className="flex-1 text-right">
-                                    <h5 className="text-white text-xs sm:text-sm font-bold leading-snug mb-1">{item}</h5>
-                                    {price > 0 && <p className="text-royal-gold text-xs font-bold mb-2">{(price * qty).toLocaleString()} ج.م</p>}
-                                    <div className="flex items-center gap-2.5">
-                                      <button
-                                        type="button"
-                                        aria-label={`تقليل كمية ${item}`}
-                                        onClick={() => onBeverageQuantityChange(item, -1)}
-                                        className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white text-sm font-bold"
-                                      >
-                                        -
-                                      </button>
-                                      <span className="text-white font-bold font-numbers text-sm min-w-[1.25rem] text-center">{qty}</span>
-                                      <button
-                                        type="button"
-                                        aria-label={`زيادة كمية ${item}`}
-                                        onClick={() => onBeverageQuantityChange(item, 1)}
-                                        className="w-7 h-7 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-sm font-bold"
-                                      >
-                                        +
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveBeverage(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1.5 flex items-center justify-center">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </motion.div>
-                              );
-                            })}
-                          </AnimatePresence>
-                        </div>
-                      )}
-
-                      {/* Addons/Drinks */}
-                      {(selectedDrinks.length > 0 || selectedExtraServices.length > 0) && (
-                        <div className="space-y-2.5">
-                          <h6 className="text-xs font-bold text-zinc-400 border-b border-white/10 pb-2">الإضافات والخدمات</h6>
-                          <AnimatePresence mode="popLayout">
-                            {selectedDrinks.map((item, idx) => {
-                              const drkData = SOFT_DRINKS.find(d => d.name === item);
-                              const price = drkData?.price || 0;
-                              const qty = drinkQuantities[item] || 1;
-                              return (
-                                <motion.div
-                                  layout
-                                  initial={{ opacity: 0, scale: 0.95 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.95 }}
-                                  key={`drk-${idx}`}
-                                  className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3"
-                                >
-                                  <div className="flex-1 text-right">
-                                    <h5 className="text-white text-xs sm:text-sm font-bold leading-snug mb-1">{item}</h5>
-                                    {price > 0 && (
-                                      <div className="mb-2">
-                                        <p className="text-zinc-400 text-xs font-medium">{price} ج.م × {qty}</p>
-                                        <p className="text-royal-gold text-xs font-bold">{(price * qty).toLocaleString()} ج.م</p>
-                                      </div>
-                                    )}
-                                    <div className="flex items-center gap-2.5">
-                                      <button
-                                        type="button"
-                                        aria-label={`تقليل كمية ${item}`}
-                                        onClick={() => onDrinkQuantityChange(item, -1)}
-                                        className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white text-sm font-bold"
-                                      >
-                                        -
-                                      </button>
-                                      <span className="text-white font-bold font-numbers text-sm min-w-[1.25rem] text-center">{qty}</span>
-                                      <button
-                                        type="button"
-                                        aria-label={`زيادة كمية ${item}`}
-                                        onClick={() => onDrinkQuantityChange(item, 1)}
-                                        className="w-7 h-7 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-sm font-bold"
-                                      >
-                                        +
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveDrink(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1.5 flex items-center justify-center">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </motion.div>
-                              );
-                            })}
-                            {selectedExtraServices.map((item, idx) => {
-                              const srvData = SERVICE_COSTS.find(s => s.label === item);
-                              const costNum = parseInt(srvData?.price.replace(/[^0-9]/g, '') || '0');
-                              const qty = serviceQuantities[item] || 1;
-                              const isPerPerson = item.includes('Cover') || item.includes('فرد');
-                              const displayQty = isPerPerson ? calcPax : qty;
-
-                              return (
-                                <motion.div
-                                  layout
-                                  initial={{ opacity: 0, scale: 0.95 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.95 }}
-                                  key={`srv-${idx}`}
-                                  className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3"
-                                >
-                                  <div className="flex-1 text-right">
-                                    <h5 className="text-white text-xs sm:text-sm font-bold leading-snug mb-1">{item}</h5>
-                                    {costNum > 0 && (
-                                      <div className="mb-2">
-                                        <p className="text-zinc-400 text-xs font-medium">{costNum} ج.م × {displayQty}</p>
-                                        <p className="text-royal-gold text-xs font-bold">{(costNum * displayQty).toLocaleString()} ج.م</p>
-                                      </div>
-                                    )}
-                                    {!isPerPerson && (
-                                      <div className="flex items-center gap-2.5">
-                                        <button
-                                          type="button"
-                                          aria-label={`تقليل كمية ${item}`}
-                                          onClick={() => onServiceQuantityChange(item, -1)}
-                                          className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white text-sm font-bold"
-                                        >
-                                          -
-                                        </button>
-                                        <span className="text-white font-bold font-numbers text-sm min-w-[1.25rem] text-center">{qty}</span>
-                                        <button
-                                          type="button"
-                                          aria-label={`زيادة كمية ${item}`}
-                                          onClick={() => onServiceQuantityChange(item, 1)}
-                                          className="w-7 h-7 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-sm font-bold"
-                                        >
-                                          +
-                                        </button>
-                                      </div>
-                                    )}
-                                    {isPerPerson && <p className="text-zinc-400 text-xs font-medium">حسب عدد الأفراد</p>}
-                                  </div>
-                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveService(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1.5 flex items-center justify-center">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </motion.div>
-                              );
-                            })}
-                          </AnimatePresence>
-                        </div>
-                      )}
-
-                      {/* Equipment */}
-                      {selectedEquipItems.length > 0 && (
-                        <div className="space-y-2.5">
-                          <h6 className="text-xs font-bold text-zinc-400 border-b border-white/10 pb-2">المعدات</h6>
-                          <AnimatePresence mode="popLayout">
-                            {selectedEquipItems.map(item => (
-                              <motion.div
-                                layout
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.95 }}
-                                key={item.id}
-                                className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3 group hover:border-royal-gold/30 transition-all"
-                              >
-                                {item.image && (
-                                  <img
-                                    src={optimizeCloudinaryImage(item.image, 160)}
-                                    alt={item.name || 'صنف مختار'}
-                                    width={48}
-                                    height={48}
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="w-12 h-12 shrink-0 rounded-xl object-cover bg-[#141414] border border-white/10 cursor-zoom-in hover:scale-105 transition-transform"
-                                    onClick={() => { if (item.image) onZoom(item.image); }}
-                                    onError={handleSafeImageError}
-                                    referrerPolicy="no-referrer"
-                                  />
-                                )}
-                                <div className="flex-1 text-right min-w-0">
-                                  <h5 className="text-white text-xs sm:text-sm font-bold leading-snug mb-1">{item.name}</h5>
-                                  {item.price && (
-                                    <div className="mb-2">
-                                      <p className="text-zinc-400 text-xs font-medium">{item.price} ج.م × {equipmentQuantities[item.id] || 1}</p>
-                                      <p className="text-royal-gold text-xs font-bold">{(item.price * (equipmentQuantities[item.id] || 1)).toLocaleString()} ج.م</p>
-                                    </div>
-                                  )}
-                                  <div className="flex items-center gap-2.5">
-                                    <button
-                                      type="button"
-                                      aria-label={`تقليل كمية ${item.name}`}
-                                      onClick={() => onQuantityChange(item.id, -1)}
-                                      className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white text-sm font-bold"
-                                    >
-                                      -
-                                    </button>
-                                    <span className="text-white font-bold font-numbers text-sm min-w-[1.25rem] text-center">{equipmentQuantities[item.id] || 1}</span>
-                                    <button
-                                      type="button"
-                                      aria-label={`زيادة كمية ${item.name}`}
-                                      onClick={() => onQuantityChange(item.id, 1)}
-                                      className="w-7 h-7 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-sm font-bold"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                </div>
-                                <button type="button" aria-label={`إزالة ${item.name} من السلة`} onClick={() => onRemoveEquipment(item.id)} className="text-zinc-400 hover:text-red-300 transition-colors p-1.5 flex items-center justify-center shrink-0">
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </motion.div>
-                            ))}
-                          </AnimatePresence>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-5 pt-5 border-t border-white/10 space-y-4">
-                      <div className="flex justify-between items-center gap-3">
-                        <span className="text-zinc-300 text-sm font-bold">إجمالي الطلب</span>
-                        <div className="flex items-baseline gap-1.5">
-                          <motion.span
-                            key={totalPrice}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="text-white text-2xl font-extrabold font-numbers inline-block"
-                          >
-                            {totalPrice.toLocaleString()}
-                          </motion.span>
-                          <span className="text-royal-gold text-xs font-bold">ج.م</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2.5">
-                        {(selectedPkg || selectedBeverages.length > 0 || selectedDrinks.length > 0 || selectedExtraServices.length > 0) && (
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={onMenuOrder}
-                            className="royal-btn-primary w-full py-3.5 text-sm font-extrabold flex items-center justify-center gap-2.5 shadow-xl"
-                          >
-                            <WhatsAppIcon className="w-4.5 h-4.5 text-black" />
-                            <span>تأكيد البيانات وإرسال الطلب</span>
-                          </motion.button>
-                        )}
-                        {selectedEquipItems.length > 0 && (
-                          <motion.button
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => onShare(selectedEquipItems)}
-                            className="royal-btn-secondary w-full py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2.5"
-                          >
-                            <WhatsAppIcon className="w-4 h-4 text-[#25d366]" />
-                            <span>طلب المعدات فقط</span>
-                          </motion.button>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
-                    <motion.div
-                      animate={{ rotate: [0, 10, -10, 0] }}
-                      transition={{ duration: 5, repeat: Infinity }}
-                      className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center text-zinc-600"
-                    >
-                      <ShoppingBasket className="w-10 h-10 opacity-25" />
-                    </motion.div>
-                    <p className="text-zinc-400 text-sm font-bold">السلة فارغة حالياً</p>
-                    <button onClick={() => { setIsOpen(false); navigateTo('portal'); }} className="text-[#c5a059] text-sm font-bold underline underline-offset-4">تصفح الضيافة</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {!isOpen && (
-        <motion.button
-          layoutId="cart-button"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
-          onClick={() => setIsOpen(true)}
-          aria-label="فتح سلة الطلبات"
-          aria-expanded={isOpen}
-          className="w-13 h-13 md:w-15 md:h-15 rounded-full shadow-[0_12px_36px_rgba(197,160,89,0.4)] flex items-center justify-center gold-shimmer group relative bg-royal-gold pointer-events-auto"
-        >
-          <ShoppingBasket className="w-6 h-6 md:w-7 md:h-7 text-black" />
-          {hasItems && (
-            <motion.span
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 bg-black text-royal-gold w-5 h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[10px] md:text-xs font-extrabold font-numbers border border-royal-gold"
-            >
-              {totalItemsCount}
-            </motion.span>
-          )}
-        </motion.button>
-      )}
-    </div>
-  );
-};
-
 const NavItem: React.FC<{ id: string; label: string; active: boolean; onClick: () => void }> = ({ id, label, active, onClick }) => (
   <button onClick={onClick} className={`px-4 py-2 text-xs sm:text-sm font-bold transition-all relative ${active ? 'text-[#c5a059]' : 'text-zinc-400 hover:text-white'}`}>
     {label}
     {active && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-royal-gold rounded-full"></span>}
   </button>
 );
-
-const EquipmentCard: React.FC<{
-  item: EquipmentItem;
-  selected: boolean;
-  quantity: number;
-  onToggle: (id: string) => void;
-  onQuantityChange: (id: string, delta: number) => void;
-  onQuantitySet: (id: string, value: number) => void;
-  onShare: (items: EquipmentItem | EquipmentItem[]) => void;
-  onZoom: (image: string) => void;
-  selectedItems: string[];
-  quantities: Record<string, number>;
-  displayOnly?: boolean;
-}> = ({ item, selected, quantity, onToggle, onQuantityChange, onQuantitySet, onShare, onZoom, selectedItems, quantities, displayOnly }) => {
-  const [currentImgIdx, setCurrentImgIdx] = useState(0);
-  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
-  const images = (item.images ?? (item.image ? [item.image] : []))
-    .filter((image): image is string => typeof image === 'string' && image.length > 0);
-  const currentImage = images[currentImgIdx] ?? null;
-
-  const handleShareSelected = () => {
-    const selectedOptions = (item.options ?? [])
-      .filter((option) => selectedItems.includes(option.id))
-      .map((option) => ({ id: option.id, name: option.name, price: option.price, image: item.image, note: item.note }));
-    onShare(selectedOptions.length > 0 ? selectedOptions : [item]);
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      className={`h-full flex flex-col bg-[#0c0c0c] border rounded-3xl overflow-hidden card-shadow relative group transition-all duration-500 card-3d gsap-card-reveal gsap-card-interactive ${selected ? 'border-royal-gold/45 ring-1 ring-royal-gold/25' : 'border-white/10'}`}
-    >
-      <div className="relative aspect-[4/3] overflow-hidden cursor-zoom-in bg-[#121212]" onClick={() => { const activeImage = images[currentImgIdx]; if (activeImage) onZoom(activeImage); }}>
-        <AnimatePresence mode="wait">
-          <motion.img
-            key={currentImage ?? item.id}
-            src={currentImage ? optimizeCloudinaryImage(currentImage, 720) : LOCAL_IMAGE_FALLBACK}
-            srcSet={currentImage ? cloudinarySrcSet(currentImage) : undefined}
-            sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-            alt={item.name || 'معدات ملوك السعادة'}
-            width={800}
-            height={600}
-            loading="lazy"
-            decoding="async"
-            initial={{ opacity: 0, scale: 1.04 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-            referrerPolicy="no-referrer"
-            onError={handleSafeImageError}
-          />
-        </AnimatePresence>
-
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 pointer-events-none"></div>
-
-        {images.length > 1 && (
-          <div className="absolute bottom-3.5 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-            {images.map((_, idx) => (
-              <div
-                key={idx}
-                className={`h-1 rounded-full transition-all duration-300 ${idx === currentImgIdx ? 'bg-royal-gold w-6' : 'bg-white/25 w-2'}`}
-              />
-            ))}
-          </div>
-        )}
-
-        {!displayOnly && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); handleShareSelected(); }}
-            aria-label={`طلب ${item.name ?? 'المعدة'} عبر WhatsApp`}
-            className="absolute top-3.5 right-3.5 w-11 h-11 min-w-[44px] min-h-[44px] bg-black/65 backdrop-blur-md border border-white/20 text-white rounded-full flex items-center justify-center hover:bg-green-500 hover:border-green-500 transition-all duration-300 group/share"
-            title="اطلب عبر واتساب"
-          >
-            <WhatsAppIcon className="w-5 h-5 group-hover/share:scale-110 transition-transform" />
-          </button>
-        )}
-      </div>
-
-      {(item.name || item.price || item.note || item.options || !displayOnly) && (
-        <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between gap-4">
-          {(item.name || item.price || item.note) && (
-            <div className="text-right">
-              {item.name && <h4 className="text-white font-bold text-base sm:text-lg mb-2 font-header whitespace-pre-line leading-snug group-hover:text-royal-gold transition-colors">{item.name}</h4>}
-              {item.price && (
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-royal-gold font-extrabold text-xl sm:text-2xl font-numbers">{item.price}</span>
-                  <span className="text-zinc-400 text-xs font-bold">ج.م</span>
-                </div>
-              )}
-              {item.note && <p className="text-[#c5a059]/85 text-xs font-medium mt-2 leading-relaxed">{item.note}</p>}
-            </div>
-          )}
-
-          {item.options ? (
-            <div className="space-y-3 mt-1">
-              {item.options.map(opt => {
-                const isOptSelected = selectedItems.includes(opt.id);
-                const optQty = quantities[opt.id] || 1;
-                return (
-                  <div key={opt.id} className={`p-4 rounded-2xl border transition-all duration-300 ${isOptSelected ? 'border-royal-gold/40 bg-royal-gold/10' : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.07]'}`}>
-                    <div className="flex justify-between items-center gap-3">
-                      <div className="text-right">
-                        <div className={`text-sm font-bold transition-colors ${isOptSelected ? 'text-royal-gold' : 'text-white'}`}>{opt.name}</div>
-                        <div className="text-zinc-400 text-xs font-bold font-numbers mt-0.5">{opt.price} ج.م</div>
-                      </div>
-                      {!displayOnly && (
-                        <button
-                          type="button"
-                          onClick={() => onToggle(opt.id)}
-                          aria-label={`اختيار ${opt.name}`}
-                          className={`w-9 h-9 shrink-0 rounded-full border flex items-center justify-center transition-all duration-300 ${isOptSelected ? 'bg-royal-gold border-royal-gold shadow-[0_0_15px_rgba(197,160,89,0.3)]' : 'border-white/25 hover:border-white/50'}`}
-                        >
-                          {isOptSelected ? <CheckIcon className="w-5 h-5 text-black" /> : <span className="text-zinc-300 font-bold text-base">+</span>}
-                        </button>
-                      )}
-                    </div>
-
-                    {isOptSelected && !displayOnly && (
-                      <div className="flex items-center justify-between bg-black/60 rounded-xl p-2.5 mt-3 border border-white/10 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <span className="text-xs font-bold text-zinc-300">الكمية</span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onQuantityChange(opt.id, -1)}
-                            className="w-8 h-8 rounded-lg bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all font-bold text-base"
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            min="1"
-                            value={optQty}
-                            onChange={(e) => onQuantitySet(opt.id, parseInt(e.target.value) || 1)}
-                            className="w-14 h-8 bg-white/5 border border-white/15 rounded-lg text-white text-center font-bold font-numbers text-sm focus:border-royal-gold/60 outline-none transition-colors"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => onQuantityChange(opt.id, 1)}
-                            className="w-8 h-8 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-base"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ) : !displayOnly ? (
-            <div className="space-y-3.5 mt-auto pt-2">
-              <div className="flex items-center justify-between bg-white/5 rounded-2xl p-3 border border-white/10 group-hover:border-white/15 transition-colors">
-                <span className="text-xs font-bold text-zinc-300">الكمية المطلوبة</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onQuantityChange(item.id, -1); }}
-                    className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all font-bold text-lg"
-                  >
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => onQuantitySet(item.id, parseInt(e.target.value) || 1)}
-                    className="w-16 h-9 bg-white/5 border border-white/15 rounded-xl text-white text-center font-bold font-numbers text-base focus:border-royal-gold/60 outline-none transition-colors"
-                  />
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onQuantityChange(item.id, 1); }}
-                    className="w-9 h-9 rounded-xl bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-lg"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onToggle(item.id)}
-                className={`w-full py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 shadow-xl flex items-center justify-center gap-2.5 ${
-                  selected
-                    ? 'royal-btn-primary scale-[1.01]'
-                    : 'royal-btn-secondary hover:border-royal-gold/60'
-                }`}
-              >
-                {selected ? (
-                  <>
-                    <CheckIcon className="w-4.5 h-4.5 text-black" />
-                    <span>تمت الإضافة للسلة</span>
-                  </>
-                ) : (
-                  <>
-                    <ChafingDishIcon className="w-4.5 h-4.5 text-royal-gold" />
-                    <span>إضافة للطلب الآن</span>
-                  </>
-                )}
-              </button>
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      <AnimatePresence>
-        {selected && (
-          <motion.div
-            initial={{ scale: 0, rotate: -45 }}
-            animate={{ scale: 1, rotate: 0 }}
-            exit={{ scale: 0, rotate: -45 }}
-            className="absolute top-3.5 left-3.5 bg-royal-gold text-black w-10 h-10 rounded-full shadow-2xl gold-shimmer flex items-center justify-center z-10 border-2 border-black/20"
-          >
-            <CheckIcon className="w-5 h-5" />
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-};
-
-// Only cart selections are stored locally; customer details and transient inquiry state are never persisted.
-const CART_STORAGE_KEY = 'molok-cart-v1';
-const equipmentIds = new Set(EQUIPMENT_DATA.flatMap(cat => [
-  ...(cat.quickSelections ?? []).map(item => item.id),
-  ...[...(cat.items ?? []), ...(cat.sections ?? []).flatMap(section => section.items)].flatMap(item => [item.id, ...(item.options ?? []).map(option => option.id)])
-]));
-const serviceNames = new Set(SERVICE_SECTIONS.flatMap(section => section.items));
-const beverageNames = new Set(BEVERAGES_MENU.filter(pkg => !pkg.perPerson).flatMap(pkg => pkg.sections.flatMap(section => section.items)));
-const drinkNames = new Set(SOFT_DRINKS.map(item => item.name));
-const safeSelection = (value: unknown, valid: Set<string>): string[] =>
-  Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === 'string' && valid.has(item)))] : [];
-const safeQuantities = (value: unknown, valid: Set<string>): Record<string, number> => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).filter(([key, quantity]) => valid.has(key) && typeof quantity === 'number' && Number.isFinite(quantity) && quantity > 0).map(([key, quantity]) => [key, Math.min(10000, normalizeQuantity(quantity))]));
-};
-const readCart = () => {
-  try {
-    const raw = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '{}');
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.version !== 1) return null;
-    return {
-      calcPax: clampGuestCount(raw.calcPax),
-      selectedPkgId: BEVERAGES_MENU.some(pkg => pkg.id === raw.selectedPkgId) ? raw.selectedPkgId as string : '',
-      selectedExtraServices: safeSelection(raw.selectedExtraServices, serviceNames),
-      selectedDrinks: safeSelection(raw.selectedDrinks, drinkNames),
-      drinkQuantities: safeQuantities(raw.drinkQuantities, drinkNames),
-      selectedBeverages: safeSelection(raw.selectedBeverages, beverageNames),
-      beverageQuantities: safeQuantities(raw.beverageQuantities, beverageNames),
-      selectedEquipment: safeSelection(raw.selectedEquipment, equipmentIds),
-      equipmentQuantities: safeQuantities(raw.equipmentQuantities, equipmentIds),
-      serviceQuantities: safeQuantities(raw.serviceQuantities, serviceNames)
-    };
-  } catch { return null; }
-};
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>('home');
@@ -1581,7 +607,7 @@ const App: React.FC = () => {
           }`}
         >
           {/* Navigation Links */}
-          <nav aria-label="القائمة الرئيسية" className="flex items-center justify-center gap-1 sm:gap-3 md:gap-5">
+          <nav aria-label="القائمة الرئيسية" className="flex min-w-0 items-center justify-center gap-0 sm:gap-3 md:gap-5">
             {NAV_ITEMS.map((nav) => {
               const isCurrent = view === nav.v || (nav.v === 'portal' && view === 'category');
               return (
@@ -1590,7 +616,7 @@ const App: React.FC = () => {
                   type="button"
                   aria-current={isCurrent ? 'page' : undefined}
                   onClick={() => navigateTo(nav.v)}
-                  className={`min-h-[42px] px-2.5 sm:px-3.5 text-xs sm:text-sm md:text-[15px] transition-colors relative py-1 whitespace-nowrap rounded-full ${
+                  className={`min-h-[44px] px-2 sm:px-3.5 text-xs sm:text-sm md:text-[15px] transition-colors relative py-1 whitespace-nowrap rounded-full ${
                     isCurrent
                       ? 'text-royal-gold font-extrabold'
                       : 'text-zinc-200 hover:text-white font-semibold'
@@ -1614,7 +640,7 @@ const App: React.FC = () => {
               whileTap={{ scale: 0.95 }}
               onClick={() => setIsCartOpen(true)}
               aria-label="سلة الطلبات"
-              className="w-10 h-10 min-w-[40px] min-h-[40px] shrink-0 rounded-full royal-btn-secondary !p-0 flex items-center justify-center text-white shadow-lg transition-all group relative border border-royal-gold/30"
+              className="w-11 h-11 min-w-[44px] min-h-[44px] shrink-0 rounded-full royal-btn-secondary !p-0 flex items-center justify-center text-white shadow-lg transition-all group relative border border-royal-gold/30"
             >
               <ShoppingBasket className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-royal-gold group-hover:text-white transition-colors" />
               {(selectedEquipment.length + selectedBeverages.length + (selectedPkgId ? 1 : 0) + selectedDrinks.length + selectedExtraServices.length) > 0 && (
@@ -1697,13 +723,9 @@ const App: React.FC = () => {
                     </div>
 
                     <motion.div
-                      initial={{ rotate: -540, scale: 0.5, opacity: 0 }}
-                      animate={{ rotate: 0, scale: 1, opacity: 1 }}
-                      transition={{
-                        rotate: { type: "spring", stiffness: 280, damping: 25 },
-                        scale: { type: "spring", stiffness: 280, damping: 25 },
-                        opacity: { duration: 0.4 }
-                      }}
+                      initial={{ scale: 0.96, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ duration: 0.45, ease: "easeOut" }}
                       className="-mt-5 sm:-mt-6 hover:scale-105 transition-transform duration-700 relative z-20"
                     >
                       <BrandLogo className="w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 drop-shadow-[0_0_55px_rgba(197,160,89,0.55)]" showGlow={true} eager={true} />
@@ -2115,7 +1137,7 @@ const App: React.FC = () => {
                                             setServiceQuantities(prev => ({ ...prev, [item]: (prev[item] || 1) + 1 }));
                                           }
                                         }}
-                                        className="w-7 h-7 rounded-lg bg-royal-gold flex items-center justify-center hover:scale-105 transition-transform text-black font-bold text-sm"
+                                        className="w-11 h-11 shrink-0 rounded-lg bg-royal-gold flex items-center justify-center hover:scale-105 transition-transform text-black font-bold text-sm"
                                       >
                                         +
                                       </button>
@@ -2133,7 +1155,7 @@ const App: React.FC = () => {
                                           }
                                         }}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="w-12 h-8 bg-white/5 border border-white/10 rounded-lg text-white text-center font-numbers font-bold text-sm focus:border-royal-gold/50 outline-none"
+                                        className="w-12 h-11 bg-white/5 border border-white/10 rounded-lg text-white text-center font-numbers font-bold text-sm focus:border-royal-gold/50 outline-none"
                                       />
                                       <button
                                         type="button"
@@ -2146,7 +1168,7 @@ const App: React.FC = () => {
                                             setServiceQuantities(prev => ({ ...prev, [item]: Math.max(1, (prev[item] || 1) - 1) }));
                                           }
                                         }}
-                                        className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white font-bold text-sm"
+                                        className="w-11 h-11 shrink-0 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white font-bold text-sm"
                                       >
                                         -
                                       </button>
@@ -2496,8 +1518,8 @@ const App: React.FC = () => {
                <input id="equipment-search" type="search" value={equipmentSearch} onChange={e => setEquipmentSearch(e.target.value)} placeholder="مثلاً: ترابيزة أو كوفي" className="w-full rounded-2xl bg-[#111] border border-white/20 focus:border-[#c5a059] text-white p-4 outline-none" />
              </div>
              <nav aria-label="أقسام المعدات" className="flex gap-2 overflow-x-auto pb-4 mb-8">
-               <button type="button" aria-current={!activeEquipmentCat ? 'page' : undefined} onClick={() => { setEquipmentSearch(''); navigateTo('tools'); }} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold ${!activeEquipmentCat ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>كل الأقسام</button>
-               {EQUIPMENT_DATA.map(cat => <button type="button" key={cat.id} aria-current={activeEquipmentCat?.id === cat.id ? 'page' : undefined} onClick={() => { setEquipmentSearch(''); navigateTo('tools', { activeEquipmentCatId: cat.id }); }} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold ${activeEquipmentCat?.id === cat.id ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>{cat.name}</button>)}
+               <button type="button" aria-current={!activeEquipmentCat ? 'page' : undefined} onClick={() => { setEquipmentSearch(''); navigateTo('tools'); }} className={`shrink-0 min-h-[44px] rounded-full border px-4 py-2 text-sm font-bold ${!activeEquipmentCat ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>كل الأقسام</button>
+               {EQUIPMENT_DATA.map(cat => <button type="button" key={cat.id} aria-current={activeEquipmentCat?.id === cat.id ? 'page' : undefined} onClick={() => { setEquipmentSearch(''); navigateTo('tools', { activeEquipmentCatId: cat.id }); }} className={`shrink-0 min-h-[44px] rounded-full border px-4 py-2 text-sm font-bold ${activeEquipmentCat?.id === cat.id ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>{cat.name}</button>)}
              </nav>
              {equipmentSearch.trim() ? (() => {
                const term = equipmentSearch.trim().toLocaleLowerCase('ar');
@@ -2565,6 +1587,8 @@ const App: React.FC = () => {
                               return (
                                 <button
                                   key={item.id}
+                                  type="button"
+                                  aria-pressed={isSelected}
                                   onClick={() => setSelectedEquipment(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}
                                   className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${
                                     isSelected
@@ -2598,7 +1622,8 @@ const App: React.FC = () => {
                                 <div className="flex justify-between items-center gap-3 mb-4">
                                   <button
                                     onClick={() => setSelectedEquipment(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}
-                                    className="flex-1 text-right"
+                                    className="flex-1 min-h-[44px] text-right"
+                                    aria-pressed={isSelected}
                                   >
                                     <h4 className={`text-base sm:text-lg font-bold transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
                                     {item.price && <p className="text-zinc-400 text-xs sm:text-sm font-bold mt-1"><span className="font-numbers text-zinc-200">{item.price}</span> ج.م</p>}
@@ -2609,15 +1634,17 @@ const App: React.FC = () => {
                                 </div>
 
                                 {isSelected && (
-                                  <div className="flex items-center justify-between bg-black/50 rounded-2xl p-3.5 gap-3 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
+                                  <div className="flex flex-wrap items-center justify-between bg-black/50 rounded-2xl p-3.5 gap-3 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
                                     <div className="text-right">
                                       <span className="text-xs text-zinc-400 font-semibold block mb-0.5">العدد المطلوب</span>
                                       {item.price && <span className="text-royal-gold text-sm font-bold"><span className="font-numbers">{(item.price * qty).toLocaleString()}</span> ج.م</span>}
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <button
+                                        type="button"
+                                        aria-label={`زيادة كمية ${item.name || 'المعدة'}`}
                                         onClick={() => updateEquipmentQty(item.id, 1)}
-                                        className="w-9 h-9 rounded-xl bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-lg"
+                                        className="w-11 h-11 shrink-0 rounded-xl bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-lg"
                                       >
                                         +
                                       </button>
@@ -2625,12 +1652,15 @@ const App: React.FC = () => {
                                         type="number"
                                         min="1"
                                         value={qty}
+                                        aria-label={`كمية ${item.name || 'المعدة'}`}
                                         onChange={(e) => updateEquipmentQtySet(item.id, parseInt(e.target.value) || 1)}
-                                        className="w-14 h-9 bg-white/5 border border-white/10 rounded-xl text-white text-center font-extrabold font-numbers text-base focus:border-royal-gold/50 outline-none transition-colors"
+                                        className="w-14 h-11 bg-white/5 border border-white/10 rounded-xl text-white text-center font-extrabold font-numbers text-base focus:border-royal-gold/50 outline-none transition-colors"
                                       />
                                       <button
+                                        type="button"
+                                        aria-label={`تقليل كمية ${item.name || 'المعدة'}`}
                                         onClick={() => updateEquipmentQty(item.id, -1)}
-                                        className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all font-bold text-lg"
+                                        className="w-11 h-11 shrink-0 rounded-xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all font-bold text-lg"
                                       >
                                         -
                                       </button>
@@ -2692,7 +1722,8 @@ const App: React.FC = () => {
                                   <div className="flex justify-between items-center gap-3 mb-4">
                                     <button
                                       onClick={() => setSelectedEquipment(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}
-                                      className="flex-1 text-right"
+                                      className="flex-1 min-h-[44px] text-right"
+                                      aria-pressed={isSelected}
                                     >
                                       <h4 className={`text-base sm:text-lg font-bold transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
                                       {item.price && <p className="text-zinc-400 text-xs sm:text-sm font-bold mt-1"><span className="font-numbers text-zinc-200">{item.price}</span> ج.م</p>}
@@ -2703,15 +1734,17 @@ const App: React.FC = () => {
                                   </div>
 
                                   {isSelected && (
-                                    <div className="flex items-center justify-between bg-black/50 rounded-2xl p-3 gap-3 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
+                                    <div className="flex flex-wrap items-center justify-between bg-black/50 rounded-2xl p-3 gap-3 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
                                       <div className="text-right">
                                         <span className="text-xs text-zinc-400 font-semibold block mb-0.5">العدد المطلوب</span>
                                         {item.price && <span className="text-royal-gold text-sm font-bold"><span className="font-numbers">{(item.price * qty).toLocaleString()}</span> ج.م</span>}
                                       </div>
                                       <div className="flex items-center gap-2">
                                         <button
-                                          onClick={() => updateEquipmentQty(item.id, 1)}
-                                          className="w-8 h-8 rounded-full bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold"
+                                          type="button"
+                                        aria-label={`زيادة كمية ${item.name || 'المعدة'}`}
+                                        onClick={() => updateEquipmentQty(item.id, 1)}
+                                          className="w-11 h-11 shrink-0 rounded-full bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold"
                                         >
                                           +
                                         </button>
@@ -2719,12 +1752,15 @@ const App: React.FC = () => {
                                           type="number"
                                           min="1"
                                           value={qty}
+                                          aria-label={`كمية ${item.name || 'المعدة'}`}
                                           onChange={(e) => updateEquipmentQtySet(item.id, parseInt(e.target.value) || 1)}
-                                          className="w-12 h-8 bg-white/5 border border-white/10 rounded-lg text-white text-center font-extrabold font-numbers text-sm focus:border-royal-gold/50 outline-none transition-colors"
+                                          className="w-12 h-11 bg-white/5 border border-white/10 rounded-lg text-white text-center font-extrabold font-numbers text-sm focus:border-royal-gold/50 outline-none transition-colors"
                                         />
                                         <button
-                                          onClick={() => updateEquipmentQty(item.id, -1)}
-                                          className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all font-bold"
+                                          type="button"
+                                        aria-label={`تقليل كمية ${item.name || 'المعدة'}`}
+                                        onClick={() => updateEquipmentQty(item.id, -1)}
+                                          className="w-11 h-11 shrink-0 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all font-bold"
                                         >
                                           -
                                         </button>
@@ -2819,8 +1855,8 @@ const App: React.FC = () => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            whileHover={{ scale: 1.08 }}
-            whileTap={{ scale: 0.92 }}
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.97 }}
             onClick={() => window.history.back()}
             className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] right-4 sm:right-8 z-[120] w-14 h-14 sm:w-15 sm:h-15 rounded-full royal-btn-secondary !p-0 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex flex-col items-center justify-center group overflow-hidden border border-royal-gold/40 hover:border-royal-gold"
           >
