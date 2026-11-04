@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingBasket, X } from 'lucide-react';
 import { SERVICE_COSTS, SOFT_DRINKS } from '../data';
 import type { EquipmentItem, MenuPackage } from '../types';
-import { clampGuestCount } from '../utils/order-utils.js';
 import { handleSafeImageError, optimizeCloudinaryImage } from '../utils/images';
 import { BrandLogo } from './BrandMedia';
+import { GuestCountInput } from './GuestCountInput';
 import { WhatsAppIcon } from './Icons';
 
 export const FloatingCart: React.FC<{
@@ -69,29 +69,12 @@ export const FloatingCart: React.FC<{
   onZoom,
   navigateTo
 }) => {
-  const [hasClosedOnce, setHasClosedOnce] = useState(false);
-
-  useEffect(() => {
-    const hasItems = selectedPkg || selectedBeverages.length > 0 || selectedDrinks.length > 0 || selectedExtraServices.length > 0 || selectedEquipment.length > 0;
-    if (hasItems && !hasClosedOnce && !isOpen) {
-      setIsOpen(true);
-    }
-  }, [selectedPkg, selectedBeverages, selectedDrinks, selectedExtraServices, selectedEquipment, hasClosedOnce, isOpen, setIsOpen]);
-
   const selectedEquipItems = useMemo(() => {
     return allEquipmentItems.filter(item => selectedEquipment.includes(item.id));
   }, [selectedEquipment, allEquipmentItems]);
 
   const hasItems = selectedEquipment.length > 0 || selectedBeverages.length > 0 || selectedPkg !== undefined || selectedDrinks.length > 0 || selectedExtraServices.length > 0;
   const totalItemsCount = selectedEquipment.length + selectedBeverages.length + (selectedPkg ? 1 : 0) + selectedDrinks.length + selectedExtraServices.length;
-
-  const prevLength = useRef(totalItemsCount);
-  useEffect(() => {
-    if (prevLength.current === 0 && totalItemsCount > 0 && !hasClosedOnce) {
-      setIsOpen(true);
-    }
-    prevLength.current = totalItemsCount;
-  }, [totalItemsCount, hasClosedOnce]);
 
   return (
     <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] left-4 right-4 sm:right-auto sm:left-8 z-[100] flex justify-end pointer-events-none">
@@ -131,26 +114,26 @@ export const FloatingCart: React.FC<{
                       مسح الكل
                     </button>
                   )}
-                  <button type="button" aria-label="إغلاق سلة الطلبات" onClick={() => { setIsOpen(false); setHasClosedOnce(true); }} className="w-11 h-11 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
+                  <button type="button" aria-label="إغلاق سلة الطلبات" onClick={() => setIsOpen(false)} className="w-11 h-11 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
                     <X className="w-5 h-5 text-zinc-300" />
                   </button>
                 </div>
               </div>
+
+              {hasItems && (
+                <p className="text-xs text-zinc-300 leading-relaxed">الأصناف بتتحفظ على جهازك. لو دي اختيارات قديمة، استخدم «مسح الكل».</p>
+              )}
 
               {/* PAX Selection in Cart */}
               <div className="bg-white/5 p-3.5 sm:p-4 rounded-2xl border border-white/10">
                 <div className="flex justify-between items-center mb-2.5 gap-3">
                   <label htmlFor="cart-pax" className="text-xs sm:text-sm font-bold text-royal-gold">عدد الأفراد (PAX)</label>
                   <div className="flex items-center gap-2">
-                    <input
-                      aria-label="عدد الأفراد في السلة"
-                      type="number"
-                      min="25"
-                      max="1000"
-                      step="1"
+                    <GuestCountInput
+                      label="عدد الأفراد في السلة"
                       value={calcPax}
-                      onChange={(e) => onPaxChange(clampGuestCount(e.target.value))}
-                      className="w-20 min-h-10 bg-white/5 border border-royal-gold/30 rounded-lg px-2 text-center text-white font-bold font-numbers text-base sm:text-lg focus:border-royal-gold outline-none"
+                      onChange={onPaxChange}
+                      className="w-20 min-h-11 bg-white/5 border border-royal-gold/30 rounded-lg px-2 text-center text-white font-bold font-numbers text-base sm:text-lg focus:border-royal-gold outline-none"
                     />
                     <span className="text-zinc-300 text-xs font-bold">فرد</span>
                   </div>

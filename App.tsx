@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useReducer } from 'react';
 import { motion, AnimatePresence, MotionConfig } from 'motion/react';
-import { ChevronRight, ArrowRight, ArrowLeft, ShoppingBasket, Sparkles, Award, Crown, Compass, Gem } from 'lucide-react';
+import { ChevronRight, ArrowRight, ArrowLeft, ShoppingBasket, Sparkles, Award, Crown, Compass, Gem, Coffee, Armchair, UsersRound } from 'lucide-react';
 import { BEVERAGES_MENU, SOFT_DRINKS, SERVICE_COSTS, SERVICE_SECTIONS, EQUIPMENT_DATA, BEVERAGES_CATEGORIES } from './data';
 import type { MenuPackage, EquipmentCategory, EquipmentItem } from './types';
 import { useGsapScrollTrigger } from './useGsap';
@@ -25,6 +25,9 @@ import { EquipmentCard } from './components/EquipmentCard';
 import { ChafingDishIcon, CheckIcon, FacebookIcon, InstagramIcon, MapPinIcon, PhoneIcon, WhatsAppIcon } from './components/Icons';
 import { cloudinarySrcSet, handleSafeImageError, LOCAL_LAMP_ASSET, optimizeCloudinaryImage } from './utils/images';
 import { CART_STORAGE_KEY, readCart } from './utils/cart-storage';
+import { DrinkQuantityInput } from './components/DrinkQuantityInput';
+import { GuestCountInput } from './components/GuestCountInput';
+import { syncDrinkQuantities } from './utils/drink-quantities.js';
 
 // --- CONFIGURATION ---
 const WHATSAPP_PHONE = "201097356529";
@@ -95,6 +98,8 @@ const App: React.FC = () => {
   const categoryName = activeCategoryMeta?.id ?? '';
   const categoryDisplayName = activeCategoryMeta?.displayName ?? 'الضيافة';
   const [activeEquipmentCat, setActiveEquipmentCat] = useState<EquipmentCategory | null>(null);
+  const equipmentResultsRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollToEquipment = useRef(false);
   const [scrolled, setScrolled] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
   const lastScrollY = useRef(0);
@@ -162,6 +167,7 @@ const App: React.FC = () => {
         ? EQUIPMENT_DATA.find((category) => category.id === state.activeEquipmentCatId) ?? null
         : null;
 
+      setIsCartOpen(false);
       setView(state.view);
       setCategoryId(state.categoryId);
       setActiveEquipmentCat(state.view === 'tools' ? nextEquipmentCategory : null);
@@ -186,6 +192,8 @@ const App: React.FC = () => {
     newView: AppView,
     extra: { categoryId?: string | null; activeEquipmentCatId?: string | null } = {}
   ) => {
+    // Navigating never opens the cart or changes its saved selections.
+    setIsCartOpen(false);
     const nextCategoryId = newView === 'category' && PORTAL_CATEGORIES.some((category) => category.id === extra.categoryId)
       ? extra.categoryId ?? null
       : null;
@@ -205,11 +213,12 @@ const App: React.FC = () => {
 
   const [savedCart] = useState(readCart);
   const [equipmentSearch, setEquipmentSearch] = useState('');
-  const [calcPax, setCalcPax] = useState(savedCart?.calcPax ?? 25);
+  const [calcPax, setCalcPaxState] = useState(savedCart?.calcPax ?? 25);
   const [selectedPkgId, setSelectedPkgId] = useState<string>(savedCart?.selectedPkgId ?? '');
   const [selectedExtraServices, setSelectedExtraServices] = useState<string[]>(savedCart?.selectedExtraServices ?? []);
   const [selectedDrinks, setSelectedDrinks] = useState<string[]>(savedCart?.selectedDrinks ?? []);
   const [drinkQuantities, setDrinkQuantities] = useState<Record<string, number>>(savedCart?.drinkQuantities ?? {});
+  const [manualDrinkQuantities, setManualDrinkQuantities] = useState<string[]>(savedCart?.manualDrinkQuantities ?? []);
   const [selectedBeverages, setSelectedBeverages] = useState<string[]>(savedCart?.selectedBeverages ?? []);
   const [beverageQuantities, setBeverageQuantities] = useState<Record<string, number>>(savedCart?.beverageQuantities ?? {});
   const [selectedEquipment, setSelectedEquipment] = useState<string[]>(savedCart?.selectedEquipment ?? []);
@@ -217,9 +226,9 @@ const App: React.FC = () => {
   const [serviceQuantities, setServiceQuantities] = useState<Record<string, number>>(savedCart?.serviceQuantities ?? {});
   useEffect(() => {
     try {
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, calcPax, selectedPkgId, selectedExtraServices, selectedDrinks, drinkQuantities, selectedBeverages, beverageQuantities, selectedEquipment, equipmentQuantities, serviceQuantities }));
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, calcPax, selectedPkgId, selectedExtraServices, selectedDrinks, drinkQuantities, manualDrinkQuantities, selectedBeverages, beverageQuantities, selectedEquipment, equipmentQuantities, serviceQuantities }));
     } catch { /* Storage may be disabled or full; the cart still works for this visit. */ }
-  }, [calcPax, selectedPkgId, selectedExtraServices, selectedDrinks, drinkQuantities, selectedBeverages, beverageQuantities, selectedEquipment, equipmentQuantities, serviceQuantities]);
+  }, [calcPax, selectedPkgId, selectedExtraServices, selectedDrinks, drinkQuantities, manualDrinkQuantities, selectedBeverages, beverageQuantities, selectedEquipment, equipmentQuantities, serviceQuantities]);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -231,10 +240,27 @@ const App: React.FC = () => {
   const [customerInfo, setCustomerInfo] = useState({ ...EMPTY_CUSTOMER_INFO });
   const [orderNotice, setOrderNotice] = useState('');
 
-  // Scroll to top on view change
+  // Category shortcuts jump directly to their content; other navigation starts at the top.
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    setIsCartOpen(false);
+    if (view === 'tools' && shouldScrollToEquipment.current && equipmentResultsRef.current) {
+      shouldScrollToEquipment.current = false;
+      equipmentResultsRef.current.scrollIntoView({ block: 'start', behavior: 'auto' });
+    } else {
+      shouldScrollToEquipment.current = false;
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
   }, [view, categoryId, activeEquipmentCat?.id]);
+
+  const openEquipmentCategory = (id: string | null) => {
+    setEquipmentSearch('');
+    if ((activeEquipmentCat?.id ?? null) === id && view === 'tools') {
+      equipmentResultsRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+      return;
+    }
+    shouldScrollToEquipment.current = true;
+    navigateTo('tools', { activeEquipmentCatId: id });
+  };
 
   useEffect(() => {
     setSelectedBeverages([]);
@@ -254,11 +280,23 @@ const App: React.FC = () => {
   const allPackages = useMemo(() => [...BEVERAGES_MENU], []);
   const selectedPkg = useMemo(() => allPackages.find(p => p.id === selectedPkgId), [selectedPkgId, allPackages]);
 
+  const setCalcPax = (value: number) => {
+    const next = clampGuestCount(value);
+    setCalcPaxState(next);
+    setDrinkQuantities(previous => syncDrinkQuantities(previous, selectedDrinks, manualDrinkQuantities, next));
+  };
+
+  const setCustomDrinkQuantity = (item: string, value: number) => {
+    setManualDrinkQuantities(previous => previous.includes(item) ? previous : [...previous, item]);
+    setDrinkQuantities(previous => ({ ...previous, [item]: normalizeQuantity(value) }));
+  };
+
   const handleBeverageQty = (item: string, delta: number) => {
     setBeverageQuantities(prev => ({ ...prev, [item]: normalizeQuantity((prev[item] || 1) + delta) }));
   };
 
   const handleDrinkQty = (item: string, delta: number) => {
+    setManualDrinkQuantities(previous => previous.includes(item) ? previous : [...previous, item]);
     setDrinkQuantities(prev => ({ ...prev, [item]: normalizeQuantity((prev[item] || 1) + delta) }));
   };
 
@@ -268,7 +306,11 @@ const App: React.FC = () => {
 
   const removeBeverage = (item: string) => setSelectedBeverages(prev => prev.filter(b => b !== item));
   const removeEquipment = (id: string) => setSelectedEquipment(prev => prev.filter(e => e !== id));
-  const removeDrink = (item: string) => setSelectedDrinks(prev => prev.filter(d => d !== item));
+  const removeDrink = (item: string) => {
+    setSelectedDrinks(prev => prev.filter(d => d !== item));
+    setManualDrinkQuantities(prev => prev.filter(name => name !== item));
+    setDrinkQuantities(prev => { const next = { ...prev }; delete next[item]; return next; });
+  };
   const removeService = (item: string) => setSelectedExtraServices(prev => prev.filter(s => s !== item));
   const removePkg = () => setSelectedPkgId('');
 
@@ -278,6 +320,7 @@ const App: React.FC = () => {
     setSelectedExtraServices([]);
     setSelectedDrinks([]);
     setDrinkQuantities({});
+    setManualDrinkQuantities([]);
     setSelectedBeverages([]);
     setBeverageQuantities({});
     setSelectedEquipment([]);
@@ -909,10 +952,16 @@ const App: React.FC = () => {
                 <section className="royal-container py-10" aria-label="استكشف خدماتنا">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                     {[
-                      [String(BEVERAGES_MENU.length), 'باقات مشروبات معروضة'],
-                      [String(EQUIPMENT_DATA.length), 'أقسام في كتالوج المعدات'],
-                      ['واتساب', 'للتواصل وطلب عرض سعر']
-                    ].map(([value, label]) => <div key={label} className="rounded-2xl border border-[#c5a059]/25 bg-[#0c0c0c] p-6"><strong className="block text-2xl font-bold text-[#c5a059]">{value}</strong><span className="text-zinc-300 text-sm">{label}</span></div>)}
+                      { title: 'باقات المشروبات', description: 'اختيارات تليق بكل مناسبة', Icon: Coffee, onClick: () => openCategory('Beverages') },
+                      { title: 'الكراسي والترابيزات', description: 'تفاصيل تكمّل أناقة مناسبتك', Icon: Armchair, onClick: () => navigateTo('tools', { activeEquipmentCatId: 'chairs-tables' }) },
+                      { title: 'فريق الضيافة', description: 'ويترز وشيف وباريستا لخدمة ضيوفك', Icon: UsersRound, onClick: () => openCategory('Services') }
+                    ].map(({ title, description, Icon, onClick }) => (
+                      <button key={title} type="button" onClick={onClick} className="group w-full min-h-[120px] rounded-2xl border border-[#c5a059]/25 bg-[#0c0c0c] p-5 sm:p-6 flex flex-col items-center justify-center gap-2 transition-colors hover:border-[#c5a059]/70 hover:bg-[#15120d]">
+                        <Icon aria-hidden="true" className="w-6 h-6 text-[#c5a059]" />
+                        <strong className="text-lg sm:text-xl font-bold text-[#c5a059] font-header">{title}</strong>
+                        <span className="text-zinc-300 text-sm leading-relaxed">{description}</span>
+                      </button>
+                    ))}
                   </div>
                 </section>
                 <section className="royal-container py-16 sm:py-20" aria-labelledby="faq-title">
@@ -978,7 +1027,16 @@ const App: React.FC = () => {
               </motion.button>
             </div>
 
-            <div className={`grid grid-cols-1 ${activeCategory.length > 1 ? 'lg:grid-cols-2' : 'max-w-4xl mx-auto'} gap-6 md:gap-8 gsap-stagger-container`}>
+            {categoryName === 'Beverages' && (
+              <div className="max-w-4xl mx-auto mb-8 sm:mb-10">
+                <div className="text-right">
+                  <h3 className="text-2xl sm:text-3xl font-bold text-white font-header">باقات المشروبات</h3>
+                  <p className="text-zinc-300 text-sm sm:text-base mt-2">اختار الباقة المناسبة، أو تصفّح المشروبات الفردية أسفل الباقات.</p>
+                </div>
+              </div>
+            )}
+
+            <div className={`grid ${categoryName === 'Beverages' ? 'grid-cols-2 gap-3 sm:gap-5 max-w-4xl mx-auto' : 'grid-cols-1 max-w-4xl mx-auto gap-6 md:gap-8'} gsap-stagger-container`}>
               {activeCategory.map((pkg, idx) => (
                 <motion.div
                   key={pkg.id}
@@ -986,11 +1044,11 @@ const App: React.FC = () => {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: idx * 0.1 }}
-                  className="bg-[#0c0c0c] border border-white/10 rounded-3xl md:rounded-[2.25rem] p-6 sm:p-8 md:p-10 card-shadow relative overflow-hidden flex flex-col group hover:border-royal-gold/30 transition-all duration-500 gsap-stagger-item gsap-card-interactive"
+                  className={`min-w-0 bg-[#0c0c0c] border border-white/10 rounded-2xl sm:rounded-3xl card-shadow relative overflow-hidden flex flex-col group hover:border-royal-gold/30 transition-all duration-500 gsap-stagger-item gsap-card-interactive ${categoryName === 'Beverages' ? 'p-3 sm:p-6 md:p-7' : 'p-6 sm:p-8 md:p-10'}`}
                 >
-                  <div className="flex justify-between items-start mb-8 sm:mb-10 flex-wrap gap-5">
+                  <div className={`flex justify-between items-start flex-wrap ${categoryName === 'Beverages' ? 'mb-4 gap-3' : 'mb-8 sm:mb-10 gap-5'}`}>
                     <div className="text-right">
-                      <h3 className="text-2xl sm:text-3xl font-bold text-royal-gold font-header mb-3">{pkg.title}</h3>
+                      <h3 className={`${categoryName === 'Beverages' ? 'text-base sm:text-xl md:text-2xl' : 'text-2xl sm:text-3xl'} font-bold text-royal-gold font-header mb-3 leading-snug`}>{pkg.title}</h3>
                       <div className="flex flex-wrap gap-2">
                         {pkg.minPeople && <span className="bg-white/10 text-xs font-semibold px-3 py-1 rounded-full text-zinc-200 border border-white/10">أقل عدد <span className="font-numbers font-bold">{pkg.minPeople}</span> فرد</span>}
                         {!pkg.id.startsWith('ad-') && (!pkg.id.startsWith('bev-') || pkg.perPerson) && (
@@ -1015,7 +1073,7 @@ const App: React.FC = () => {
 
                           return (
                             <>
-                              <div className="text-4xl sm:text-5xl font-extrabold text-white font-numbers tracking-tight">{perPersonPrice.toLocaleString()}</div>
+                              <div className={`${categoryName === 'Beverages' ? 'text-2xl sm:text-3xl' : 'text-4xl sm:text-5xl'} font-extrabold text-white font-numbers tracking-tight`}>{perPersonPrice.toLocaleString()}</div>
                               <div className="mt-1.5 text-left">
                                 <span className="text-xs text-zinc-400 font-bold block">ج.م {pkg.perPerson ? '/ للفرد' : 'إجمالي'}</span>
                                 {pkg.perPerson && (
@@ -1061,7 +1119,9 @@ const App: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <div className="space-y-8 sm:space-y-10 flex-1">
+                  <details className="flex-1" open={categoryName === 'Beverages' ? undefined : true}>
+                    <summary className={categoryName === 'Beverages' ? 'cursor-pointer min-h-[44px] flex items-center text-sm font-bold text-[#f7e1a0]' : 'hidden'}>تفاصيل الباقة <span aria-hidden="true" className="mr-2">⌄</span></summary>
+                  <div className="space-y-5 sm:space-y-8">
                     {pkg.sections.map((sec, i) => (
                       <div key={i} className="text-right">
                         <h4 className="text-sm sm:text-base font-bold text-[#c5a059] mb-4 flex items-center gap-3">
@@ -1188,6 +1248,7 @@ const App: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                  </details>
                   {pkg.id === 'srv-cat' && (
                     <div className="mt-10 p-6 sm:p-7 bg-royal-gold/5 border border-royal-gold/20 rounded-2xl text-right">
                       <div className="flex items-center gap-4">
@@ -1202,20 +1263,20 @@ const App: React.FC = () => {
                     </div>
                   )}
                   {pkg.id !== 'srv-cat' && (
-                    <div className="mt-10 flex flex-col sm:flex-row gap-3">
+                    <div className={`${categoryName === 'Beverages' ? 'mt-4 flex-col' : 'mt-10 flex-col sm:flex-row'} flex gap-2 sm:gap-3`}>
                       <button
                         onClick={() => {
                           setSelectedPkgId(pkg.id);
-                          setIsCartOpen(true);
                         }}
-                        className="royal-btn-secondary flex-1 py-3.5 text-xs sm:text-sm font-bold"
+                        aria-pressed={selectedPkgId === pkg.id}
+                        className="royal-btn-secondary flex-1 min-h-[44px] !px-2 py-3 text-xs sm:text-sm font-bold"
                       >
                         <ShoppingBasket className="w-4 h-4 text-royal-gold" />
-                        <span>إضافة للسلة</span>
+                        <span>{selectedPkgId === pkg.id ? 'تمت الإضافة للسلة' : 'إضافة للسلة'}</span>
                       </button>
                       <button
                         onClick={() => handleSharePackage(pkg)}
-                        className="royal-btn-primary flex-1 py-3.5 text-xs sm:text-sm font-extrabold shadow-lg"
+                        className="royal-btn-primary flex-1 min-h-[44px] !px-2 py-3 text-xs sm:text-sm font-extrabold shadow-lg"
                       >
                         <WhatsAppIcon className="w-4 h-4 text-black" />
                         <span>اطلب الآن</span>
@@ -1227,24 +1288,20 @@ const App: React.FC = () => {
             </div>
 
             {categoryName === 'Beverages' && (
-              <div className="mt-16 sm:mt-20 space-y-16 animate-in fade-in slide-in-from-bottom-10 duration-700">
+              <div className="mt-14 sm:mt-20 max-w-4xl mx-auto space-y-8 sm:space-y-10 animate-in fade-in duration-700">
                 {/* PAX Selection */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="glass-card p-6 sm:p-8 rounded-3xl border border-[#c5a059]/25 card-shadow text-right max-w-2xl mx-auto"
+                  className="glass-card p-5 sm:p-8 rounded-3xl border border-[#c5a059]/25 card-shadow text-right"
                 >
                   <div className="flex justify-between items-center mb-5 gap-4">
                     <label htmlFor="beverage-pax" id="beverage-pax-label" className="text-white text-lg sm:text-xl font-bold font-header">عدد الأفراد (PAX)</label>
                     <div className="flex items-center gap-2">
-                      <input
-                        aria-label="عدد الأفراد في الضيافة"
-                        type="number"
-                        min="25"
-                        max="1000"
-                        step="1"
+                      <GuestCountInput
+                        label="عدد الأفراد في الضيافة"
                         value={calcPax}
-                        onChange={e => setCalcPax(clampGuestCount(e.target.value))}
+                        onChange={setCalcPax}
                         className="w-24 min-h-11 bg-white/5 border border-royal-gold/40 rounded-xl px-2 text-center text-royal-gold font-numbers text-xl sm:text-2xl font-extrabold focus:border-royal-gold outline-none"
                       />
                       <span className="text-zinc-400 text-xs sm:text-sm font-bold">فرد</span>
@@ -1260,7 +1317,7 @@ const App: React.FC = () => {
                     step="1"
                     value={calcPax}
                     onChange={e => setCalcPax(clampGuestCount(e.target.value))}
-                    className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#c5a059]"
+                    className="w-full h-6 bg-transparent cursor-pointer accent-[#c5a059]"
                   />
                   <div className="flex justify-between mt-3 text-xs font-bold text-zinc-400 font-numbers">
                     <span>25 فرد</span>
@@ -1268,90 +1325,54 @@ const App: React.FC = () => {
                   </div>
                 </motion.div>
 
-                <div className="text-center">
-                  <h3 className="text-3xl sm:text-4xl font-bold text-white font-header mb-4">
-                    اختيار مشروبات فردية (بالفرد)
-                  </h3>
-                  <div className="w-20 h-1 bg-[#c5a059] mx-auto rounded-full"></div>
+                <div className="text-right border-b border-white/10 pb-6">
+                  <h3 className="text-2xl sm:text-3xl font-bold text-white font-header">مشروبات فردية</h3>
+                  <p className="text-zinc-300 text-sm sm:text-base mt-2">كل صنف بيبدأ بعدد الأفراد، وتقدر تغيّر كميته أو تكتب عدد مختلف.</p>
                 </div>
 
-                {BEVERAGES_CATEGORIES.map((category, catIdx) => (
-                  <div key={catIdx} className="space-y-8">
-                    <div className="flex items-center gap-4">
-                      <h4 className="text-xl sm:text-2xl font-bold text-royal-gold font-header whitespace-nowrap">{category.name}</h4>
-                      <div className="h-px bg-white/10 flex-1"></div>
+                {BEVERAGES_CATEGORIES.map((category) => (
+                  <section key={category.name} className="bg-[#0c0c0c] border border-white/10 rounded-3xl p-4 sm:p-6 md:p-8 card-shadow" aria-label={category.name}>
+                    <div className="flex items-center gap-3 mb-5">
+                      <h4 className="text-lg sm:text-xl font-bold text-royal-gold font-header leading-relaxed">{category.name}</h4>
+                      <div className="h-px bg-[#c5a059]/20 flex-1"></div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
-                      {category.items.map((drink, idx) => {
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {category.items.map((drink) => {
                         const isSelected = selectedDrinks.includes(drink.name);
                         const qty = drinkQuantities[drink.name] || 1;
                         return (
-                          <div
-                            key={idx}
-                            className={`p-6 sm:p-7 rounded-3xl border transition-all duration-500 flex flex-col justify-between items-center text-center ${isSelected ? 'border-royal-gold bg-royal-gold/10 shadow-royal-gold/10' : 'border-white/10 bg-[#0c0c0c] hover:border-white/20'} card-shadow group`}
-                          >
+                          <div key={drink.name} className={`rounded-2xl border p-3.5 sm:p-4 transition-colors ${isSelected ? 'border-[#c5a059]/70 bg-[#c5a059]/10' : 'border-white/10 bg-white/[0.02] hover:border-white/20'}`}>
                             <button
                               type="button"
                               aria-pressed={isSelected}
-                              className="w-full min-h-[44px] flex flex-col items-center text-center"
+                              className="w-full min-h-[44px] flex items-center justify-between gap-3 text-right"
                               onClick={() => {
                                 if (!isSelected) {
                                   setSelectedDrinks((previous) => [...previous, drink.name]);
-                                  setDrinkQuantities((previous) => ({
-                                    ...previous,
-                                    [drink.name]: normalizeQuantity(previous[drink.name] ?? 1)
-                                  }));
+                                  setDrinkQuantities((previous) => ({ ...previous, [drink.name]: calcPax }));
+                                  setManualDrinkQuantities(previous => previous.filter(name => name !== drink.name));
                                 } else {
-                                  setSelectedDrinks((previous) => previous.filter((name) => name !== drink.name));
-                                  setDrinkQuantities((previous) => {
-                                    const next = { ...previous };
-                                    delete next[drink.name];
-                                    return next;
-                                  });
+                                  removeDrink(drink.name);
                                 }
                               }}
                             >
-                              <span aria-hidden="true" className={`w-12 h-12 rounded-full border flex items-center justify-center mb-4 transition-all duration-500 ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/15 group-hover:border-royal-gold/50'}`}>
-                                {isSelected ? <CheckIcon className="w-6 h-6 text-black" /> : <span className="text-xl">🥤</span>}
+                              <span className="min-w-0">
+                                <span className={`block text-sm sm:text-base font-bold leading-relaxed ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{drink.name}</span>
+                                <span className="block mt-1 text-xs sm:text-sm text-zinc-300 font-semibold"><span className="font-numbers">{drink.price}</span> ج.م / للصنف</span>
                               </span>
-                              <span className={`text-base sm:text-lg font-bold mb-1.5 transition-colors duration-500 ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{drink.name}</span>
-                              <span className="text-zinc-400 text-xs sm:text-sm font-bold"><span className="font-numbers text-zinc-200">{drink.price}</span> ج.م / للصنف</span>
+                              <span aria-hidden="true" className={`w-10 h-10 shrink-0 rounded-full border flex items-center justify-center font-bold text-lg ${isSelected ? 'bg-royal-gold border-royal-gold text-black' : 'border-white/20 text-zinc-300'}`}>
+                                {isSelected ? <CheckIcon className="w-5 h-5" /> : '+'}
+                              </span>
                             </button>
 
                             {isSelected && (
-                              <div className="mt-5 space-y-3 w-full animate-in fade-in zoom-in duration-300">
-                                <div className="flex items-center justify-center gap-3 bg-black/50 p-2 rounded-2xl border border-white/10">
-                                  <button
-                                    type="button"
-                                    aria-label={`زيادة كمية ${drink.name}`}
-                                    onClick={() => {
-                                      setDrinkQuantities((previous) => ({
-                                        ...previous,
-                                        [drink.name]: normalizeQuantity((previous[drink.name] || 1) + 1)
-                                      }));
-                                    }}
-                                    className="w-10 h-10 rounded-xl bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors font-bold text-lg"
-                                  >
-                                    +
-                                  </button>
-                                  <output aria-live="polite" className="text-white font-extrabold font-numbers text-base min-w-[2rem]">{qty}</output>
-                                  <button
-                                    type="button"
-                                    aria-label={`تقليل كمية ${drink.name}`}
-                                    onClick={() => {
-                                      setDrinkQuantities((previous) => ({
-                                        ...previous,
-                                        [drink.name]: normalizeQuantity((previous[drink.name] || 1) - 1)
-                                      }));
-                                    }}
-                                    className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white font-bold text-lg"
-                                  >
-                                    -
-                                  </button>
-                                </div>
-                                <div className="text-xs font-bold text-royal-gold">
-                                  الإجمالي: <span className="font-numbers">{(drink.price * qty).toLocaleString()}</span> ج.م
+                              <div className="mt-3 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
+                                <span className="text-xs sm:text-sm font-bold text-royal-gold">الإجمالي: <span className="font-numbers">{(drink.price * qty).toLocaleString()}</span> ج.م</span>
+                                <div className="flex items-center gap-2" aria-label={`كمية ${drink.name}`}>
+                                  <button type="button" aria-label={`زيادة كمية ${drink.name}`} onClick={() => handleDrinkQty(drink.name, 1)} className="w-11 h-11 rounded-xl bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors font-bold text-lg">+</button>
+                                  <DrinkQuantityInput name={drink.name} value={qty} onChange={(value) => setCustomDrinkQuantity(drink.name, value)} />
+                                  <button type="button" aria-label={`تقليل كمية ${drink.name}`} onClick={() => handleDrinkQty(drink.name, -1)} className="w-11 h-11 rounded-xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-colors font-bold text-lg">−</button>
                                 </div>
                               </div>
                             )}
@@ -1359,7 +1380,7 @@ const App: React.FC = () => {
                         );
                       })}
                     </div>
-                  </div>
+                  </section>
                 ))}
               </div>
             )}
@@ -1518,9 +1539,10 @@ const App: React.FC = () => {
                <input id="equipment-search" type="search" value={equipmentSearch} onChange={e => setEquipmentSearch(e.target.value)} placeholder="مثلاً: ترابيزة أو كوفي" className="w-full rounded-2xl bg-[#111] border border-white/20 focus:border-[#c5a059] text-white p-4 outline-none" />
              </div>
              <nav aria-label="أقسام المعدات" className="flex gap-2 overflow-x-auto pb-4 mb-8">
-               <button type="button" aria-current={!activeEquipmentCat ? 'page' : undefined} onClick={() => { setEquipmentSearch(''); navigateTo('tools'); }} className={`shrink-0 min-h-[44px] rounded-full border px-4 py-2 text-sm font-bold ${!activeEquipmentCat ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>كل الأقسام</button>
-               {EQUIPMENT_DATA.map(cat => <button type="button" key={cat.id} aria-current={activeEquipmentCat?.id === cat.id ? 'page' : undefined} onClick={() => { setEquipmentSearch(''); navigateTo('tools', { activeEquipmentCatId: cat.id }); }} className={`shrink-0 min-h-[44px] rounded-full border px-4 py-2 text-sm font-bold ${activeEquipmentCat?.id === cat.id ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>{cat.name}</button>)}
+               <button type="button" aria-current={!activeEquipmentCat ? 'page' : undefined} onClick={() => openEquipmentCategory(null)} className={`shrink-0 min-h-[44px] rounded-full border px-4 py-2 text-sm font-bold ${!activeEquipmentCat ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>كل الأقسام</button>
+               {EQUIPMENT_DATA.map(cat => <button type="button" key={cat.id} aria-current={activeEquipmentCat?.id === cat.id ? 'page' : undefined} onClick={() => openEquipmentCategory(cat.id)} className={`shrink-0 min-h-[44px] rounded-full border px-4 py-2 text-sm font-bold ${activeEquipmentCat?.id === cat.id ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}><span aria-hidden="true" className="text-base ml-1.5">{cat.icon}</span>{cat.name}</button>)}
              </nav>
+             <div ref={equipmentResultsRef} className="scroll-mt-24">
              {equipmentSearch.trim() ? (() => {
                const term = equipmentSearch.trim().toLocaleLowerCase('ar');
                const matches = EQUIPMENT_DATA.flatMap(cat => {
@@ -1528,14 +1550,14 @@ const App: React.FC = () => {
                  const matched = items.filter(item => [item.name, 'note' in item ? item.note : '', ...('options' in item ? (item.options ?? []).map(option => option.name) : [])].some(text => text?.toLocaleLowerCase('ar').includes(term)));
                  return cat.name.toLocaleLowerCase('ar').includes(term) && !matched.length ? [{ cat, name: cat.name, id: cat.id }] : matched.map(item => ({ cat, name: item.name || 'صنف بدون اسم', id: item.id }));
                });
-               return <div aria-live="polite">{matches.length ? <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{matches.map(({cat, name, id}) => <button key={`${cat.id}-${id}`} onClick={() => { setEquipmentSearch(''); navigateTo('tools', { activeEquipmentCatId: cat.id }); }} className="text-right p-5 rounded-2xl bg-[#111] border border-white/10 hover:border-[#c5a059] text-white"><span className="font-bold block">{name}</span><span className="text-[#c5a059] text-sm">{cat.name} ← عرض القسم</span></button>)}</div> : <p className="text-center text-zinc-300 py-8">مفيش نتائج مطابقة. جرّب كلمة تانية.</p>}</div>;
+               return <div aria-live="polite">{matches.length ? <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{matches.map(({cat, name, id}) => <button key={`${cat.id}-${id}`} onClick={() => openEquipmentCategory(cat.id)} className="text-right p-5 rounded-2xl bg-[#111] border border-white/10 hover:border-[#c5a059] text-white"><span className="font-bold block">{name}</span><span className="text-[#c5a059] text-sm">{cat.name} ← عرض القسم</span></button>)}</div> : <p className="text-center text-zinc-300 py-8">مفيش نتائج مطابقة. جرّب كلمة تانية.</p>}</div>;
              })() : !activeEquipmentCat ? (
 
                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
                  {EQUIPMENT_DATA.map(cat => (
-                   <button type="button" key={cat.id} onClick={() => navigateTo('tools', { activeEquipmentCatId: cat.id })} className="group bg-[#0c0c0c] border border-white/10 p-7 sm:p-8 rounded-3xl text-center cursor-pointer card-shadow relative overflow-hidden transition-all hover:border-[#c5a059]/40 flex flex-col items-center justify-between">
+                   <button type="button" key={cat.id} onClick={() => openEquipmentCategory(cat.id)} className="group bg-[#0c0c0c] border border-white/10 p-7 sm:p-8 rounded-3xl text-center cursor-pointer card-shadow relative overflow-hidden transition-all hover:border-[#c5a059]/40 flex flex-col items-center justify-between">
                      <div className="absolute top-0 right-0 w-24 h-24 bg-royal-gold/5 rounded-bl-[8rem] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                     <span className="text-5xl block mb-5 grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500">{cat.icon}</span>
+                     <span className="text-3xl sm:text-4xl block mb-4 grayscale group-hover:grayscale-0 group-hover:scale-105 transition-all duration-500">{cat.icon}</span>
                      <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-[#c5a059] transition-colors mb-2 font-header">{cat.name}</h3>
                      <div className="mt-4 h-0.5 w-8 bg-[#c5a059]/30 mx-auto group-hover:w-16 group-hover:bg-[#c5a059] transition-all"></div>
                    </button>
@@ -1613,19 +1635,19 @@ const App: React.FC = () => {
 
                    {activeEquipmentCat.items && (
                       activeEquipmentCat.displayMode === 'grid' ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:gap-6">
                           {activeEquipmentCat.items.map((item) => {
                             const isSelected = selectedEquipment.includes(item.id);
                             const qty = equipmentQuantities[item.id] || 1;
                             return (
-                              <div key={item.id} className={`p-6 sm:p-7 rounded-3xl border transition-all duration-500 ${isSelected ? 'border-royal-gold bg-royal-gold/10 shadow-royal-gold/10' : 'border-white/10 bg-[#0c0c0c] hover:border-white/20'} card-shadow`}>
-                                <div className="flex justify-between items-center gap-3 mb-4">
+                              <div key={item.id} className={`min-w-0 p-2 sm:p-5 lg:p-7 rounded-2xl sm:rounded-3xl border transition-all duration-500 ${isSelected ? 'border-royal-gold bg-royal-gold/10 shadow-royal-gold/10' : 'border-white/10 bg-[#0c0c0c] hover:border-white/20'} card-shadow`}>
+                                <div className="flex flex-wrap justify-between items-center gap-1 sm:gap-3 mb-4">
                                   <button
                                     onClick={() => setSelectedEquipment(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}
                                     className="flex-1 min-h-[44px] text-right"
                                     aria-pressed={isSelected}
                                   >
-                                    <h4 className={`text-base sm:text-lg font-bold transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
+                                    <h4 className={`text-xs sm:text-base lg:text-lg break-words font-bold transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
                                     {item.price && <p className="text-zinc-400 text-xs sm:text-sm font-bold mt-1"><span className="font-numbers text-zinc-200">{item.price}</span> ج.م</p>}
                                   </button>
                                   <div className={`w-6 h-6 shrink-0 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/20'}`}>
@@ -1634,12 +1656,12 @@ const App: React.FC = () => {
                                 </div>
 
                                 {isSelected && (
-                                  <div className="flex flex-wrap items-center justify-between bg-black/50 rounded-2xl p-3.5 gap-3 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
+                                  <div className="flex flex-wrap items-center justify-between bg-black/50 rounded-2xl p-1 sm:p-3.5 gap-2 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
                                     <div className="text-right">
                                       <span className="text-xs text-zinc-400 font-semibold block mb-0.5">العدد المطلوب</span>
                                       {item.price && <span className="text-royal-gold text-sm font-bold"><span className="font-numbers">{(item.price * qty).toLocaleString()}</span> ج.م</span>}
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                                       <button
                                         type="button"
                                         aria-label={`زيادة كمية ${item.name || 'المعدة'}`}
@@ -1672,7 +1694,7 @@ const App: React.FC = () => {
                           })}
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:gap-6 items-start">
                           {activeEquipmentCat.items.map((item) => (
                             <EquipmentCard
                               key={item.id}
@@ -1713,19 +1735,19 @@ const App: React.FC = () => {
                           </div>
                         )}
                         {activeEquipmentCat.displayMode === 'grid' ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+                          <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:gap-6">
                             {section.items.map((item) => {
                               const isSelected = selectedEquipment.includes(item.id);
                               const qty = equipmentQuantities[item.id] || 1;
                               return (
-                                <div key={item.id} className={`p-6 sm:p-7 rounded-3xl border transition-all duration-500 ${isSelected ? 'border-royal-gold bg-royal-gold/10 shadow-royal-gold/10' : 'border-white/10 bg-[#0c0c0c] hover:border-white/20'} card-shadow`}>
-                                  <div className="flex justify-between items-center gap-3 mb-4">
+                                <div key={item.id} className={`min-w-0 p-2 sm:p-5 lg:p-7 rounded-2xl sm:rounded-3xl border transition-all duration-500 ${isSelected ? 'border-royal-gold bg-royal-gold/10 shadow-royal-gold/10' : 'border-white/10 bg-[#0c0c0c] hover:border-white/20'} card-shadow`}>
+                                  <div className="flex flex-wrap justify-between items-center gap-1 sm:gap-3 mb-4">
                                     <button
                                       onClick={() => setSelectedEquipment(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}
                                       className="flex-1 min-h-[44px] text-right"
                                       aria-pressed={isSelected}
                                     >
-                                      <h4 className={`text-base sm:text-lg font-bold transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
+                                      <h4 className={`text-xs sm:text-base lg:text-lg break-words font-bold transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
                                       {item.price && <p className="text-zinc-400 text-xs sm:text-sm font-bold mt-1"><span className="font-numbers text-zinc-200">{item.price}</span> ج.م</p>}
                                     </button>
                                     <div className={`w-6 h-6 shrink-0 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/20'}`}>
@@ -1734,12 +1756,12 @@ const App: React.FC = () => {
                                   </div>
 
                                   {isSelected && (
-                                    <div className="flex flex-wrap items-center justify-between bg-black/50 rounded-2xl p-3 gap-3 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
+                                    <div className="flex flex-wrap items-center justify-between bg-black/50 rounded-2xl p-1 sm:p-3 gap-2 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
                                       <div className="text-right">
                                         <span className="text-xs text-zinc-400 font-semibold block mb-0.5">العدد المطلوب</span>
                                         {item.price && <span className="text-royal-gold text-sm font-bold"><span className="font-numbers">{(item.price * qty).toLocaleString()}</span> ج.م</span>}
                                       </div>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                                         <button
                                           type="button"
                                         aria-label={`زيادة كمية ${item.name || 'المعدة'}`}
@@ -1772,7 +1794,7 @@ const App: React.FC = () => {
                             })}
                           </div>
                         ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
+                          <div className="grid grid-cols-3 gap-2 sm:gap-4 lg:gap-6 items-start">
                             {section.items.map((item) => (
                               <EquipmentCard
                                 key={item.id}
@@ -1806,6 +1828,7 @@ const App: React.FC = () => {
 
                 </div>
              )}
+             </div>
            </div>
         )}
 

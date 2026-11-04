@@ -13,6 +13,8 @@ const { optimizeCloudinaryImage, cloudinarySrcSet, handleSafeImageError } = awai
 test('cart restoration tolerates invalid storage and validates saved selections', () => {
   const original = globalThis.localStorage;
   try {
+    globalThis.localStorage = { getItem: () => null };
+    assert.equal(readCart(), null);
     globalThis.localStorage = { getItem: () => '{broken' };
     assert.equal(readCart(), null);
     globalThis.localStorage = { getItem: () => { throw new Error('storage disabled'); } };

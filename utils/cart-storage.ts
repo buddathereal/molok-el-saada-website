@@ -26,6 +26,7 @@ export const readCart = () => {
       selectedExtraServices: safeSelection(raw.selectedExtraServices, serviceNames),
       selectedDrinks: safeSelection(raw.selectedDrinks, drinkNames),
       drinkQuantities: safeQuantities(raw.drinkQuantities, drinkNames),
+      manualDrinkQuantities: safeSelection(Array.isArray(raw.manualDrinkQuantities) ? raw.manualDrinkQuantities : raw.selectedDrinks, drinkNames).filter(name => safeSelection(raw.selectedDrinks, drinkNames).includes(name)),
       selectedBeverages: safeSelection(raw.selectedBeverages, beverageNames),
       beverageQuantities: safeQuantities(raw.beverageQuantities, beverageNames),
       selectedEquipment: safeSelection(raw.selectedEquipment, equipmentIds),
