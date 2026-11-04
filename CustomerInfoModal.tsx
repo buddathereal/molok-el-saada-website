@@ -224,14 +224,14 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
           >
             <div className="p-5 sm:p-6 border-b border-[#c5a059]/15 flex justify-between items-center gap-4">
               <div>
-                <h2 id="customer-dialog-title" className="text-white font-black font-header text-xl">{isAppointment ? 'احجز موعدك' : 'تأكيد بيانات الحجز'}</h2>
-                <p id="customer-dialog-description" className="text-zinc-300 text-xs mt-1">{isAppointment ? 'قولنا مناسبتك إمتى وفين، وهنجهزلك كوتيشن مناسب.' : 'املأ البيانات المطلوبة، ثم راجع الرسالة قبل إرسالها من WhatsApp.'}</p>
+                <h2 id="customer-dialog-title" className="text-white font-bold font-header text-xl sm:text-2xl">{isAppointment ? 'احجز موعدك' : 'تأكيد بيانات الحجز'}</h2>
+                <p id="customer-dialog-description" className="text-zinc-300 text-xs sm:text-sm mt-1 leading-relaxed">{isAppointment ? 'قولنا مناسبتك إمتى وفين، وهنجهزلك كوتيشن مناسب.' : 'املأ البيانات المطلوبة، ثم راجع الرسالة قبل إرسالها من WhatsApp.'}</p>
               </div>
               <button
                 type="button"
                 onClick={handleClose}
                 aria-label="إغلاق نافذة بيانات الحجز"
-                className="text-zinc-200 hover:text-white transition-colors rounded-xl min-w-[44px] min-h-[44px] flex items-center justify-center"
+                className="text-zinc-200 hover:text-white transition-colors rounded-xl min-w-[44px] min-h-[44px] flex items-center justify-center shrink-0"
               >
                 <X className="w-6 h-6" aria-hidden="true" />
               </button>
@@ -239,7 +239,7 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
 
             <div className="p-5 sm:p-6 space-y-4 overflow-y-auto custom-scrollbar">
               <div className="space-y-1.5">
-                <label htmlFor="customer-name" className="text-xs text-zinc-200 font-bold block">الاسم ثنائي <span aria-hidden="true" className="text-royal-gold">*</span></label>
+                <label htmlFor="customer-name" className="text-sm text-zinc-100 font-bold block">الاسم ثنائي <span aria-hidden="true" className="text-royal-gold">*</span></label>
                 <input
                   ref={nameInputRef}
                   id="customer-name"
@@ -260,7 +260,7 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="customer-phone" className="text-xs text-zinc-200 font-bold block">رقم الهاتف <span aria-hidden="true" className="text-royal-gold">*</span></label>
+                <label htmlFor="customer-phone" className="text-sm text-zinc-100 font-bold block">رقم الهاتف <span aria-hidden="true" className="text-royal-gold">*</span></label>
                 <input
                   id="customer-phone"
                   name="phone"
@@ -280,7 +280,7 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="customer-eventDate" className="text-xs text-zinc-200 font-bold block">ميعاد المناسبة <span aria-hidden="true" className="text-royal-gold">*</span></label>
+                <label htmlFor="customer-eventDate" className="text-sm text-zinc-100 font-bold block">ميعاد المناسبة <span aria-hidden="true" className="text-royal-gold">*</span></label>
                 <input
                   id="customer-eventDate"
                   name="eventDate"
@@ -300,13 +300,13 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <div className="flex justify-between items-center gap-3 flex-row-reverse">
-                  <label htmlFor="customer-eventLocation" className="text-xs text-zinc-200 font-bold">مكان المناسبة أو اللوكيشن (اختياري)</label>
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <label htmlFor="customer-eventLocation" className="text-sm text-zinc-100 font-bold">مكان المناسبة أو اللوكيشن (اختياري)</label>
                   <button
                     type="button"
                     onClick={handleGetLocation}
                     disabled={isGettingLocation}
-                    className="text-sm min-h-[44px] px-3 text-royal-gold font-bold hover:underline disabled:opacity-60 rounded-lg"
+                    className="text-xs sm:text-sm min-h-[44px] px-3 text-royal-gold font-bold hover:underline disabled:opacity-60 rounded-lg"
                   >
                     {isGettingLocation ? 'جاري التحديد...' : 'استخدم موقعي الحالي'}
                   </button>
@@ -325,7 +325,7 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="customer-message" className="text-xs text-zinc-200 font-bold block">ملاحظات إضافية (اختياري)</label>
+                <label htmlFor="customer-message" className="text-sm text-zinc-100 font-bold block">ملاحظات إضافية (اختياري)</label>
                 <textarea
                   id="customer-message"
                   name="message"
@@ -366,7 +366,7 @@ export const CustomerInfoModal: React.FC<CustomerInfoModalProps> = ({
             <div className="p-5 sm:p-6 bg-[#111] border-t border-[#c5a059]/15">
               <button
                 type="submit"
-                className="royal-btn-primary w-full min-h-[48px] py-4 text-sm font-black uppercase tracking-widest cursor-pointer flex items-center justify-center gap-2.5 shadow-xl"
+                className="royal-btn-primary w-full min-h-[48px] py-4 text-sm sm:text-base font-extrabold cursor-pointer flex items-center justify-center gap-2.5 shadow-xl"
               >
                 <span>{isAppointment ? 'إرسال طلب الموعد' : 'تجهيز الطلب في WhatsApp'}</span>
                 <Check className="w-5 h-5 text-black" aria-hidden="true" />
