@@ -914,7 +914,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     document.title = view === 'home'
-      ? 'ملوك السعادة - الفخامة في الضيافة'
+      ? 'ملوك السعادة لخدمات الضيافة'
       : `${pageTitle} | ملوك السعادة`;
   }, [pageTitle, view]);
 
