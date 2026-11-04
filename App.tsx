@@ -101,6 +101,8 @@ const BrandLogo: React.FC<{ className?: string; showGlow?: boolean; imgStyle?: R
         <img 
           src={USER_LOGO_URL} 
           alt="Molok El Saada Logo" 
+          loading="eager"
+          decoding="async"
           className="w-full h-full object-contain relative z-10 transition-transform duration-700 group-hover:scale-110 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]" 
           onError={(e) => {
             e.currentTarget.style.display = 'none';
@@ -537,6 +539,8 @@ const FloatingCart: React.FC<{
                                 <img 
                                   src={item.image} 
                                   alt={item.name} 
+                                  loading="lazy"
+                                  decoding="async"
                                   className="w-12 h-12 rounded-xl object-cover border border-white/10 cursor-zoom-in hover:scale-110 transition-transform" 
                                   onClick={() => { if (item.image) onZoom(item.image); }}
                                   referrerPolicy="no-referrer"
@@ -715,7 +719,11 @@ const EquipmentCard: React.FC<{
           <motion.img 
             key={images[currentImgIdx]}
             src={images[currentImgIdx]} 
+            srcSet={currentImage ? cloudinarySrcSet(currentImage) : undefined}
+            sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             alt={item.id} 
+            loading="lazy"
+            decoding="async"
             initial={{ opacity: 0, scale: 1.1 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
@@ -1456,11 +1464,16 @@ const App: React.FC = () => {
                {/* Premium Background Image with Luxury Vignette and Gradients */}
                <div className="absolute inset-0 z-0 select-none pointer-events-none bg-[#050505]">
                  <picture className="w-full h-full block">
-                   <source media="(min-width: 768px)" srcSet="https://res.cloudinary.com/dhktkzpap/image/upload/v1784323411/bfe5c1c7-4080-44dc-bd9a-80f243fc9122_ne8rrq.png" />
+                   <source media="(min-width: 768px)" srcSet={cloudinarySrcSet("https://res.cloudinary.com/dhktkzpap/image/upload/v1784323411/bfe5c1c7-4080-44dc-bd9a-80f243fc9122_ne8rrq.png")} sizes="100vw" />
                    <img 
-                     src="https://res.cloudinary.com/dhktkzpap/image/upload/v1784656446/d88ceec3-56ac-422e-a7ad-812f3f216698_tf7hyo.png" 
+                     src={optimizeCloudinaryImage("https://res.cloudinary.com/dhktkzpap/image/upload/v1784656446/d88ceec3-56ac-422e-a7ad-812f3f216698_tf7hyo.png", 960)}
+                     srcSet={cloudinarySrcSet("https://res.cloudinary.com/dhktkzpap/image/upload/v1784656446/d88ceec3-56ac-422e-a7ad-812f3f216698_tf7hyo.png")}
+                     sizes="100vw"
                      alt="Molok El Saada Chafing Dish" 
                      className="w-full h-full object-cover object-center scale-100 filter brightness-[0.85] contrast-[1.05]" 
+                     loading="eager"
+                     fetchPriority="high"
+                     decoding="async"
                      referrerPolicy="no-referrer"
                    />
                  </picture>
@@ -1491,6 +1504,7 @@ const App: React.FC = () => {
                         src="https://road9media.com/templates/r9/images/furnitures/lamp.png" 
                         alt="Royal Chandelier" 
                         className="w-full h-auto drop-shadow-[0_15px_35px_rgba(197,160,89,0.35)] filter brightness-110 contrast-105"
+                        decoding="async"
                         referrerPolicy="no-referrer"
                       />
                       {/* Realistic Light Cone Emission shining down and illuminating the logo */}
@@ -1604,9 +1618,13 @@ const App: React.FC = () => {
               {/* Anti-pixelation smoothing layer with luxury atmospheric treatment */}
               <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none">
                 <img 
-                  src="https://res.cloudinary.com/dhktkzpap/image/upload/v1784662591/8aba16bcfe2f755902869df3346ef14a_z565po.jpg"
+                  src={optimizeCloudinaryImage("https://res.cloudinary.com/dhktkzpap/image/upload/v1784662591/8aba16bcfe2f755902869df3346ef14a_z565po.jpg", 1440)}
+                  srcSet={cloudinarySrcSet("https://res.cloudinary.com/dhktkzpap/image/upload/v1784662591/8aba16bcfe2f755902869df3346ef14a_z565po.jpg")}
+                  sizes="100vw"
                   alt="Atmosphere"
                   className="w-full h-full object-cover object-center scale-105 filter blur-[1.5px] md:blur-[2px] brightness-[0.95] contrast-[1.12] opacity-85 md:opacity-80"
+                  loading="lazy"
+                  decoding="async"
                   referrerPolicy="no-referrer"
                 />
 
@@ -1644,8 +1662,16 @@ const App: React.FC = () => {
                         { url: 'https://res.cloudinary.com/dqrs3mdmi/image/upload/v1774826480/WhatsApp_Image_2026-03-30_at_1.20.07_AM_mu08y8.jpg', class: 'col-span-1 row-span-1' },
                         { url: 'https://res.cloudinary.com/dqrs3mdmi/image/upload/v1774826482/WhatsApp_Image_2026-03-30_at_1.20.08_AM_vscdnh.jpg', class: 'col-span-1 row-span-1' },
                       ].map((img, i) => (
-                        <div key={i} className={`${img.class} group relative overflow-hidden rounded-[2rem] md:rounded-[3rem] card-shadow border border-white/10 bg-black/50 gsap-stagger-item gsap-card-interactive`}>
-                          <img src={img.url} className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" alt="Royal Event" />
+                        <div key={i} className={`${img.class} aspect-square group relative overflow-hidden rounded-[2rem] md:rounded-[3rem] card-shadow border border-white/10 bg-black/50 gsap-stagger-item gsap-card-interactive`}>
+                          <img
+                            src={optimizeCloudinaryImage(img.url, 960)}
+                            srcSet={cloudinarySrcSet(img.url)}
+                            sizes={i === 0 ? "(min-width: 1024px) 50vw, 100vw" : "(min-width: 1024px) 25vw, 50vw"}
+                            className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                            alt="Royal Event"
+                            loading="lazy"
+                            decoding="async"
+                          />
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-8">
                             <div className="text-right w-full">
                               <span className="text-royal-gold font-bold text-xs uppercase tracking-widest block mb-2">Molok El Saada</span>
@@ -2544,6 +2570,8 @@ const App: React.FC = () => {
                 src={lightboxImage} 
                 className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" 
                 alt="Zoomed View" 
+                loading="eager"
+                decoding="async"
                 referrerPolicy="no-referrer"
               />
             </motion.div>
