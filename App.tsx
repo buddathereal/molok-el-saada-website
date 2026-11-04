@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useReducer } from 'react';
-import { motion, AnimatePresence, MotionConfig, useReducedMotion, useScroll, useTransform } from 'motion/react';
+import { motion, AnimatePresence, MotionConfig, useReducedMotion } from 'motion/react';
 import { X, ChevronRight, ArrowRight, ArrowLeft, ShoppingBasket, Sparkles, Award, Crown, Compass, Gem } from 'lucide-react';
 import { BEVERAGES_MENU, SOFT_DRINKS, SERVICE_COSTS, SERVICE_SECTIONS, EQUIPMENT_DATA, BEVERAGES_CATEGORIES } from './data';
 import type { MenuPackage, EquipmentCategory, EquipmentItem } from './types';
@@ -21,7 +21,13 @@ import {
 import { normalizeNavigationHistoryState } from './utils/navigation-history.js';
 
 // --- CONFIGURATION ---
-const USER_LOGO_URL = "https://i.postimg.cc/xj33dFYd/Picsart-26-01-31-03-15-31-627.png"; 
+const USER_LOGO_URL = "https://i.postimg.cc/xj33dFYd/Picsart-26-01-31-03-15-31-627.png";
+const LOCAL_LOGO_FALLBACK = "/favicon.png";
+const LOCAL_IMAGE_FALLBACK = "/image-placeholder.svg";
+const LOCAL_LAMP_ASSET = "/royal-lamp.svg";
+const FOOTER_VIDEO_POSTER = "https://res.cloudinary.com/dhktkzpap/video/upload/f_auto,q_auto,w_960,so_0/171262654_1788182400783352_jlqkjm.jpg";
+const FOOTER_VIDEO_WEBM = "https://res.cloudinary.com/dhktkzpap/video/upload/q_auto,w_960/171262654_1788182400783352_jlqkjm.webm";
+const FOOTER_VIDEO_MP4 = "https://res.cloudinary.com/dhktkzpap/video/upload/q_auto,w_960/171262654_1788182400783352_jlqkjm.mp4";
 const WHATSAPP_PHONE = "201097356529";
 const WHATSAPP_BUSINESS_LINK = "https://wa.me/201097356529";
 
@@ -52,15 +58,24 @@ const NAV_ITEMS: Array<{ v: AppView; l: string }> = [
   { v: 'contact', l: 'تواصل معنا' }
 ];
 
-const optimizeCloudinaryImage = (url: string, width: number) =>
-  url.includes('/image/upload/')
-    ? url.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${width},c_limit/`)
-    : url;
+const optimizeCloudinaryImage = (url: string, width: number) => {
+  if (!url || !url.includes('/image/upload/')) return url;
+  const normalized = url.replace('/image/upload/f_auto,q_auto/', '/image/upload/');
+  return normalized.replace('/image/upload/', `/image/upload/f_auto,q_auto,w_${width},c_limit/`);
+};
 
 const cloudinarySrcSet = (url: string) =>
-  url.includes('/image/upload/')
+  url && url.includes('/image/upload/')
     ? [480, 960, 1440].map((width) => `${optimizeCloudinaryImage(url, width)} ${width}w`).join(', ')
     : undefined;
+
+const handleSafeImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+  const img = e.currentTarget;
+  if (img.dataset.fallbackApplied === 'true') return;
+  img.dataset.fallbackApplied = 'true';
+  img.srcset = '';
+  img.src = LOCAL_IMAGE_FALLBACK;
+};
 
 const SERVICE_CATEGORY_PACKAGE: MenuPackage = {
   id: 'srv-cat',
@@ -82,37 +97,126 @@ const PORTAL_CATEGORIES: Array<{
 
 // --- Shared Components ---
 
-const BrandLogo: React.FC<{ className?: string; showGlow?: boolean; imgStyle?: React.CSSProperties }> = ({ 
-  className = "w-20 h-20", 
+const BrandLogo: React.FC<{ className?: string; showGlow?: boolean; imgStyle?: React.CSSProperties; eager?: boolean }> = ({
+  className = "w-20 h-20",
   showGlow = true,
-  imgStyle
+  imgStyle,
+  eager = false
 }) => {
+  const prefersReducedMotion = useReducedMotion();
+  const [logoSrc, setLogoSrc] = useState<string>(USER_LOGO_URL || LOCAL_LOGO_FALLBACK);
+  const [logoFailed, setLogoFailed] = useState(false);
+
   return (
-    <motion.div 
-      animate={{ y: [0, -5, 0] }}
-      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+    <motion.div
+      animate={prefersReducedMotion ? undefined : { y: [0, -5, 0] }}
+      transition={prefersReducedMotion ? undefined : { duration: 4, repeat: Infinity, ease: "easeInOut" }}
       className={`${className} relative flex items-center justify-center overflow-visible group transition-transform duration-700`}
     >
       {showGlow && (
         <div className="absolute inset-0 bg-[#c5a059]/10 blur-[30px] rounded-full scale-150 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
       )}
-      
-      {USER_LOGO_URL ? (
-        <img 
-          src={USER_LOGO_URL} 
-          alt="Molok El Saada Logo" 
-          loading="eager"
+
+      {!logoFailed ? (
+        <img
+          src={logoSrc}
+          alt="شعار ملوك السعادة"
+          width={256}
+          height={256}
+          loading={eager ? "eager" : "lazy"}
+          fetchPriority={eager ? "high" : "auto"}
           decoding="async"
-          className="w-full h-full object-contain relative z-10 transition-transform duration-700 group-hover:scale-110 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]" 
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-contain relative z-10 transition-transform duration-700 group-hover:scale-110 drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+          onError={() => {
+            if (logoSrc !== LOCAL_LOGO_FALLBACK) {
+              setLogoSrc(LOCAL_LOGO_FALLBACK);
+            } else {
+              setLogoFailed(true);
+            }
           }}
           style={imgStyle}
         />
       ) : (
-        <span className="text-[#c5a059] font-black text-xs font-header">ملوك السعادة</span>
+        <span className="text-[#c5a059] font-bold text-sm sm:text-base font-header">ملوك السعادة</span>
       )}
     </motion.div>
+  );
+};
+
+const LazyFooterVideo: React.FC = () => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const prefersReducedMotion = useReducedMotion();
+  const [shouldLoadVideo, setShouldLoadVideo] = useState(false);
+  const [saveDataEnabled] = useState(() => {
+    if (typeof navigator === 'undefined') return false;
+    const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    return Boolean(conn?.saveData);
+  });
+
+  useEffect(() => {
+    if (prefersReducedMotion || saveDataEnabled) return;
+    const node = containerRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        if (entry.isIntersecting) {
+          setShouldLoadVideo(true);
+          videoRef.current?.play().catch(() => {});
+        } else {
+          videoRef.current?.pause();
+        }
+      },
+      { rootMargin: '350px 0px', threshold: 0.01 }
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [prefersReducedMotion, saveDataEnabled]);
+
+  useEffect(() => {
+    if (shouldLoadVideo && videoRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  }, [shouldLoadVideo]);
+
+  return (
+    <div ref={containerRef} aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none bg-[#050505]">
+      <img
+        src={FOOTER_VIDEO_POSTER}
+        alt=""
+        width={960}
+        height={540}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        onError={(e) => {
+          e.currentTarget.style.display = 'none';
+        }}
+        className="absolute inset-0 w-full h-full object-cover object-center scale-105 opacity-75"
+        style={{ filter: 'blur(0.5px) brightness(0.62) contrast(1.08)' }}
+      />
+      {shouldLoadVideo && !prefersReducedMotion && !saveDataEnabled && (
+        <video
+          ref={videoRef}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="metadata"
+          poster={FOOTER_VIDEO_POSTER}
+          className="relative z-[1] w-full h-full object-cover object-center scale-105"
+          style={{ filter: 'blur(0.5px) brightness(0.65) contrast(1.1) saturate(1.05)' }}
+        >
+          <source src={FOOTER_VIDEO_WEBM} type="video/webm" />
+          <source src={FOOTER_VIDEO_MP4} type="video/mp4" />
+        </video>
+      )}
+    </div>
   );
 };
 
@@ -191,12 +295,12 @@ const FloatingCart: React.FC<{
   setIsOpen: (val: boolean) => void;
   onZoom: (img: string) => void;
   navigateTo: (newView: any, extra?: any) => void;
-}> = ({ 
-  selectedEquipment, 
-  equipmentQuantities, 
-  onQuantityChange, 
+}> = ({
+  selectedEquipment,
+  equipmentQuantities,
+  onQuantityChange,
   onRemoveEquipment,
-  onShare, 
+  onShare,
   allEquipmentItems,
   selectedBeverages,
   beverageQuantities,
@@ -230,7 +334,7 @@ const FloatingCart: React.FC<{
       setIsOpen(true);
     }
   }, [selectedPkg, selectedBeverages, selectedDrinks, selectedExtraServices, selectedEquipment, hasClosedOnce, isOpen, setIsOpen]);
-  
+
   const selectedEquipItems = useMemo(() => {
     return allEquipmentItems.filter(item => selectedEquipment.includes(item.id));
   }, [selectedEquipment, allEquipmentItems]);
@@ -247,54 +351,54 @@ const FloatingCart: React.FC<{
   }, [totalItemsCount, hasClosedOnce]);
 
   return (
-    <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0.75rem)+5rem)] left-3 right-3 sm:left-10 sm:right-auto md:bottom-10 z-[100] flex justify-start pointer-events-none">
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] left-4 right-4 sm:right-auto sm:left-8 z-[100] flex justify-end pointer-events-none">
       <AnimatePresence>
         {isOpen && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.8, y: 50, rotate: -5 }}
-            animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 50, rotate: -5 }}
-            transition={{ type: "spring", damping: 20, stiffness: 300 }}
-            className="bg-[#0c0c0c]/95 backdrop-blur-2xl border border-[#c5a059]/30 w-full sm:w-[360px] md:w-[400px] max-h-[75dvh] sm:max-h-[650px] h-[75dvh] sm:h-[650px] rounded-[2rem] md:rounded-[2.5rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden origin-bottom-left text-right pointer-events-auto"
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 30 }}
+            transition={{ type: "spring", damping: 24, stiffness: 320 }}
+            className="bg-[#0c0c0c]/95 backdrop-blur-2xl border border-[#c5a059]/30 w-full sm:w-[370px] md:w-[410px] max-h-[78dvh] sm:max-h-[650px] h-[76dvh] sm:h-[640px] rounded-3xl md:rounded-[2.25rem] shadow-[0_30px_100px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden origin-bottom-left text-right pointer-events-auto"
           >
             {/* Header */}
-            <div className="p-6 bg-white/[0.02] border-b border-[#c5a059]/10 flex flex-col gap-4">
-              <div className="flex justify-between items-center flex-row-reverse">
-                <div className="flex items-center gap-3 flex-row-reverse">
-                  <BrandLogo className="w-10 h-10" showGlow={false} />
+            <div className="p-5 sm:p-6 bg-white/[0.02] border-b border-[#c5a059]/15 flex flex-col gap-4">
+              <div className="flex justify-between items-center gap-3">
+                <div className="flex items-center gap-3">
+                  <BrandLogo className="w-10 h-10 shrink-0" showGlow={false} />
                   <div className="text-right">
-                    <h4 className="text-white text-xs font-black uppercase tracking-widest gold-text-shimmer">
+                    <h4 className="text-white text-base font-bold font-header gold-text-shimmer">
                       سلة الطلبات
                     </h4>
-                    <div className="flex items-center gap-1.5 mt-0.5 justify-end">
-                      <span className="text-[9px] text-zinc-500 uppercase font-bold">
-                        {totalItemsCount} Items Selected
-                      </span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                      <span className="text-xs text-zinc-400 font-semibold">
+                        {totalItemsCount} {totalItemsCount === 1 ? 'صنف مختار' : 'أصناف مختارة'}
+                      </span>
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {hasItems && (
-                    <button 
+                    <button
                       type="button"
                       onClick={onClearAll}
-                      className="text-[9px] text-red-500 font-black uppercase tracking-widest hover:text-red-400 transition-colors"
+                      className="text-xs text-red-400 font-bold hover:text-red-300 transition-colors px-2 py-1"
                     >
                       مسح الكل
                     </button>
                   )}
-                  <button type="button" aria-label="إغلاق سلة الطلبات" onClick={() => { setIsOpen(false); setHasClosedOnce(true); }} className="w-11 h-11 md:w-11 md:h-11 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
-                    <X className="w-5 h-5 text-zinc-400" />
+                  <button type="button" aria-label="إغلاق سلة الطلبات" onClick={() => { setIsOpen(false); setHasClosedOnce(true); }} className="w-11 h-11 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors">
+                    <X className="w-5 h-5 text-zinc-300" />
                   </button>
                 </div>
               </div>
 
               {/* PAX Selection in Cart */}
-              <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                <div className="flex justify-between items-center mb-2 flex-row-reverse">
-                  <label htmlFor="cart-pax" className="text-[10px] font-black text-royal-gold uppercase tracking-widest">عدد الأفراد (PAX)</label>
-                  <div className="flex items-center gap-2 flex-row-reverse">
+              <div className="bg-white/5 p-3.5 sm:p-4 rounded-2xl border border-white/10">
+                <div className="flex justify-between items-center mb-2.5 gap-3">
+                  <label htmlFor="cart-pax" className="text-xs sm:text-sm font-bold text-royal-gold">عدد الأفراد (PAX)</label>
+                  <div className="flex items-center gap-2">
                     <input
                       aria-label="عدد الأفراد في السلة"
                       type="number"
@@ -303,58 +407,58 @@ const FloatingCart: React.FC<{
                       step="1"
                       value={calcPax}
                       onChange={(e) => onPaxChange(clampGuestCount(e.target.value))}
-                      className="w-20 min-h-10 bg-white/5 border border-royal-gold/30 rounded-lg px-2 text-center text-white font-black font-numbers text-lg focus:border-royal-gold outline-none"
+                      className="w-20 min-h-10 bg-white/5 border border-royal-gold/30 rounded-lg px-2 text-center text-white font-bold font-numbers text-base sm:text-lg focus:border-royal-gold outline-none"
                     />
-                    <span className="text-zinc-500 text-[10px] font-bold">فرد</span>
+                    <span className="text-zinc-300 text-xs font-bold">فرد</span>
                   </div>
                 </div>
-                <input 
+                <input
                   id="cart-pax"
-                  type="range" 
-                  min="25" 
-                  max="1000" 
+                  type="range"
+                  min="25"
+                  max="1000"
                   step="1"
-                  value={calcPax} 
+                  value={calcPax}
                   onChange={(e) => onPaxChange(parseInt(e.target.value))}
-                  className="w-full accent-royal-gold h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                  className="w-full accent-royal-gold h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="flex-1 flex flex-col p-6 overflow-hidden">
+              <div className="flex-1 flex flex-col p-5 sm:p-6 overflow-hidden">
                 {hasItems ? (
                   <>
-                    <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto space-y-5 pl-1 custom-scrollbar">
                       {/* Menu Package */}
                       {selectedPkg && (
-                        <motion.div 
+                        <motion.div
                           initial={{ opacity: 0, x: 20 }}
                           animate={{ opacity: 1, x: 0 }}
-                          className="space-y-3"
+                          className="space-y-2.5"
                         >
-                          <h6 className="text-[9px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">الضيافة المختارة</h6>
-                          <div className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col gap-4 hover:border-royal-gold/20 transition-colors">
-                            <div className="flex items-center justify-between flex-row-reverse gap-4">
+                          <h6 className="text-xs font-bold text-zinc-400 border-b border-white/10 pb-2">الضيافة المختارة</h6>
+                          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 hover:border-royal-gold/25 transition-colors">
+                            <div className="flex items-start justify-between gap-3">
                               <div className="flex-1 text-right">
-                                <h5 className="text-white text-[10px] font-black mb-1">{selectedPkg.title}</h5>
+                                <h5 className="text-white text-sm font-bold mb-1 font-header">{selectedPkg.title}</h5>
                                 <div className="flex flex-col gap-1">
-                                  <p className="text-royal-gold text-[9px] font-black">
+                                  <p className="text-royal-gold text-xs font-bold">
                                     {selectedPkg.perPerson ? (
                                       <>
                                         {selectedPkg.price} ج.م للفرد × {calcPax} فرد
                                       </>
                                     ) : (
-                                      <>سعر الباكدج: {selectedPkg.price} ج.م</>
+                                      <>سعر الباقة: {selectedPkg.price} ج.م</>
                                     )}
                                   </p>
-                                  <p className="text-white text-[10px] font-black">
+                                  <p className="text-white text-xs sm:text-sm font-bold">
                                     الإجمالي: {(selectedPkg.perPerson ? selectedPkg.price * calcPax : selectedPkg.price).toLocaleString()} ج.م
                                   </p>
                                 </div>
                               </div>
-                              <button type="button" aria-label={`إزالة باقة ${selectedPkg.title} من السلة`} onClick={onRemovePkg} className="text-zinc-400 hover:text-red-300 transition-colors flex items-center justify-center">
+                              <button type="button" aria-label={`إزالة باقة ${selectedPkg.title} من السلة`} onClick={onRemovePkg} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
@@ -364,46 +468,46 @@ const FloatingCart: React.FC<{
 
                       {/* Other Selected Items (Beverages) */}
                       {selectedBeverages.length > 0 && (
-                        <div className="space-y-3">
-                          <h6 className="text-[9px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">الأصناف المختارة</h6>
+                        <div className="space-y-2.5">
+                          <h6 className="text-xs font-bold text-zinc-400 border-b border-white/10 pb-2">الأصناف المختارة</h6>
                           <AnimatePresence mode="popLayout">
                             {selectedBeverages.map((item, idx) => {
                               const match = item.match(/—\s*(\d+)\s*ج/);
                               const price = match ? parseInt(match[1]) : 0;
                               const qty = beverageQuantities[item] || 1;
                               return (
-                                <motion.div 
+                                <motion.div
                                   layout
-                                  initial={{ opacity: 0, scale: 0.9 }}
+                                  initial={{ opacity: 0, scale: 0.95 }}
                                   animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.9 }}
-                                  key={`b-${idx}`} 
-                                  className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between flex-row-reverse gap-4 group hover:border-royal-gold/30 transition-all"
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  key={`b-${idx}`}
+                                  className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3 group hover:border-royal-gold/30 transition-all"
                                 >
                                   <div className="flex-1 text-right">
-                                    <h5 className="text-white text-[10px] font-black leading-tight mb-1">{item}</h5>
-                                    {price > 0 && <p className="text-royal-gold text-[9px] font-bold mb-2">{(price * qty).toLocaleString()} ج.م</p>}
-                                    <div className="flex items-center justify-end gap-3">
-                                      <button 
+                                    <h5 className="text-white text-xs sm:text-sm font-bold leading-snug mb-1">{item}</h5>
+                                    {price > 0 && <p className="text-royal-gold text-xs font-bold mb-2">{(price * qty).toLocaleString()} ج.م</p>}
+                                    <div className="flex items-center gap-2.5">
+                                      <button
                                         type="button"
                                         aria-label={`تقليل كمية ${item}`}
                                         onClick={() => onBeverageQuantityChange(item, -1)}
-                                        className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
+                                        className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white text-sm font-bold"
                                       >
                                         -
                                       </button>
-                                      <span className="text-white font-black font-numbers text-xs">{qty}</span>
-                                      <button 
+                                      <span className="text-white font-bold font-numbers text-sm min-w-[1.25rem] text-center">{qty}</span>
+                                      <button
                                         type="button"
                                         aria-label={`زيادة كمية ${item}`}
                                         onClick={() => onBeverageQuantityChange(item, 1)}
-                                        className="w-6 h-6 rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-xs"
+                                        className="w-7 h-7 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-sm font-bold"
                                       >
                                         +
                                       </button>
                                     </div>
                                   </div>
-                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveBeverage(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
+                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveBeverage(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1.5 flex items-center justify-center">
                                     <X className="w-4 h-4" />
                                   </button>
                                 </motion.div>
@@ -415,51 +519,51 @@ const FloatingCart: React.FC<{
 
                       {/* Addons/Drinks */}
                       {(selectedDrinks.length > 0 || selectedExtraServices.length > 0) && (
-                        <div className="space-y-3">
-                          <h6 className="text-[9px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">الإضافات والخدمات</h6>
+                        <div className="space-y-2.5">
+                          <h6 className="text-xs font-bold text-zinc-400 border-b border-white/10 pb-2">الإضافات والخدمات</h6>
                           <AnimatePresence mode="popLayout">
                             {selectedDrinks.map((item, idx) => {
                               const drkData = SOFT_DRINKS.find(d => d.name === item);
                               const price = drkData?.price || 0;
                               const qty = drinkQuantities[item] || 1;
                               return (
-                                <motion.div 
+                                <motion.div
                                   layout
-                                  initial={{ opacity: 0, scale: 0.9 }}
+                                  initial={{ opacity: 0, scale: 0.95 }}
                                   animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.9 }}
-                                  key={`drk-${idx}`} 
-                                  className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between flex-row-reverse gap-4"
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  key={`drk-${idx}`}
+                                  className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3"
                                 >
                                   <div className="flex-1 text-right">
-                                    <h5 className="text-white text-[10px] font-black leading-tight mb-1">{item}</h5>
+                                    <h5 className="text-white text-xs sm:text-sm font-bold leading-snug mb-1">{item}</h5>
                                     {price > 0 && (
                                       <div className="mb-2">
-                                        <p className="text-zinc-500 text-[8px] font-bold">{price} ج.م × {qty}</p>
-                                        <p className="text-royal-gold text-[9px] font-bold">{(price * qty).toLocaleString()} ج.م</p>
+                                        <p className="text-zinc-400 text-xs font-medium">{price} ج.م × {qty}</p>
+                                        <p className="text-royal-gold text-xs font-bold">{(price * qty).toLocaleString()} ج.م</p>
                                       </div>
                                     )}
-                                    <div className="flex items-center justify-end gap-3">
-                                      <button 
+                                    <div className="flex items-center gap-2.5">
+                                      <button
                                         type="button"
                                         aria-label={`تقليل كمية ${item}`}
                                         onClick={() => onDrinkQuantityChange(item, -1)}
-                                        className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
+                                        className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white text-sm font-bold"
                                       >
                                         -
                                       </button>
-                                      <span className="text-white font-black font-numbers text-xs">{qty}</span>
-                                      <button 
+                                      <span className="text-white font-bold font-numbers text-sm min-w-[1.25rem] text-center">{qty}</span>
+                                      <button
                                         type="button"
                                         aria-label={`زيادة كمية ${item}`}
                                         onClick={() => onDrinkQuantityChange(item, 1)}
-                                        className="w-6 h-6 rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-xs"
+                                        className="w-7 h-7 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-sm font-bold"
                                       >
                                         +
                                       </button>
                                     </div>
                                   </div>
-                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveDrink(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
+                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveDrink(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1.5 flex items-center justify-center">
                                     <X className="w-4 h-4" />
                                   </button>
                                 </motion.div>
@@ -471,48 +575,48 @@ const FloatingCart: React.FC<{
                               const qty = serviceQuantities[item] || 1;
                               const isPerPerson = item.includes('Cover') || item.includes('فرد');
                               const displayQty = isPerPerson ? calcPax : qty;
-                              
+
                               return (
-                                <motion.div 
+                                <motion.div
                                   layout
-                                  initial={{ opacity: 0, scale: 0.9 }}
+                                  initial={{ opacity: 0, scale: 0.95 }}
                                   animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.9 }}
-                                  key={`srv-${idx}`} 
-                                  className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between flex-row-reverse gap-4"
+                                  exit={{ opacity: 0, scale: 0.95 }}
+                                  key={`srv-${idx}`}
+                                  className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3"
                                 >
                                   <div className="flex-1 text-right">
-                                    <h5 className="text-white text-[10px] font-black leading-tight mb-1">{item}</h5>
+                                    <h5 className="text-white text-xs sm:text-sm font-bold leading-snug mb-1">{item}</h5>
                                     {costNum > 0 && (
                                       <div className="mb-2">
-                                        <p className="text-zinc-500 text-[8px] font-bold">{costNum} ج.م × {displayQty}</p>
-                                        <p className="text-royal-gold text-[9px] font-bold">{(costNum * displayQty).toLocaleString()} ج.م</p>
+                                        <p className="text-zinc-400 text-xs font-medium">{costNum} ج.م × {displayQty}</p>
+                                        <p className="text-royal-gold text-xs font-bold">{(costNum * displayQty).toLocaleString()} ج.م</p>
                                       </div>
                                     )}
                                     {!isPerPerson && (
-                                      <div className="flex items-center justify-end gap-3">
-                                        <button 
+                                      <div className="flex items-center gap-2.5">
+                                        <button
                                           type="button"
                                           aria-label={`تقليل كمية ${item}`}
                                           onClick={() => onServiceQuantityChange(item, -1)}
-                                          className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
+                                          className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white text-sm font-bold"
                                         >
                                           -
                                         </button>
-                                        <span className="text-white font-black font-numbers text-xs">{qty}</span>
-                                        <button 
+                                        <span className="text-white font-bold font-numbers text-sm min-w-[1.25rem] text-center">{qty}</span>
+                                        <button
                                           type="button"
                                           aria-label={`زيادة كمية ${item}`}
                                           onClick={() => onServiceQuantityChange(item, 1)}
-                                          className="w-6 h-6 rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-xs"
+                                          className="w-7 h-7 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-sm font-bold"
                                         >
                                           +
                                         </button>
                                       </div>
                                     )}
-                                    {isPerPerson && <p className="text-zinc-500 text-[8px] font-bold uppercase tracking-widest">حسب عدد الأفراد</p>}
+                                    {isPerPerson && <p className="text-zinc-400 text-xs font-medium">حسب عدد الأفراد</p>}
                                   </div>
-                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveService(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
+                                  <button type="button" aria-label={`إزالة ${item} من السلة`} onClick={() => onRemoveService(item)} className="text-zinc-400 hover:text-red-300 transition-colors p-1.5 flex items-center justify-center">
                                     <X className="w-4 h-4" />
                                   </button>
                                 </motion.div>
@@ -524,56 +628,61 @@ const FloatingCart: React.FC<{
 
                       {/* Equipment */}
                       {selectedEquipItems.length > 0 && (
-                        <div className="space-y-3">
-                          <h6 className="text-[9px] font-black text-zinc-500 uppercase tracking-widest border-b border-white/5 pb-2">المعدات</h6>
+                        <div className="space-y-2.5">
+                          <h6 className="text-xs font-bold text-zinc-400 border-b border-white/10 pb-2">المعدات</h6>
                           <AnimatePresence mode="popLayout">
                             {selectedEquipItems.map(item => (
-                              <motion.div 
+                              <motion.div
                                 layout
-                                initial={{ opacity: 0, scale: 0.9 }}
+                                initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.9 }}
-                                key={item.id} 
-                                className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between flex-row-reverse gap-4 group hover:border-royal-gold/30 transition-all"
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                key={item.id}
+                                className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-3 group hover:border-royal-gold/30 transition-all"
                               >
-                                <img 
-                                  src={item.image} 
-                                  alt={item.name} 
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="w-12 h-12 rounded-xl object-cover border border-white/10 cursor-zoom-in hover:scale-110 transition-transform" 
-                                  onClick={() => { if (item.image) onZoom(item.image); }}
-                                  referrerPolicy="no-referrer"
-                                />
-                                <div className="flex-1 text-right">
-                                  <h5 className="text-white text-[10px] font-black leading-tight mb-1">{item.name}</h5>
+                                {item.image && (
+                                  <img
+                                    src={optimizeCloudinaryImage(item.image, 160)}
+                                    alt={item.name || 'صنف مختار'}
+                                    width={48}
+                                    height={48}
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-12 h-12 shrink-0 rounded-xl object-cover bg-[#141414] border border-white/10 cursor-zoom-in hover:scale-105 transition-transform"
+                                    onClick={() => { if (item.image) onZoom(item.image); }}
+                                    onError={handleSafeImageError}
+                                    referrerPolicy="no-referrer"
+                                  />
+                                )}
+                                <div className="flex-1 text-right min-w-0">
+                                  <h5 className="text-white text-xs sm:text-sm font-bold leading-snug mb-1">{item.name}</h5>
                                   {item.price && (
                                     <div className="mb-2">
-                                      <p className="text-zinc-500 text-[8px] font-bold">{item.price} ج.م × {equipmentQuantities[item.id] || 1}</p>
-                                      <p className="text-royal-gold text-[9px] font-bold">{(item.price * (equipmentQuantities[item.id] || 1)).toLocaleString()} ج.م</p>
+                                      <p className="text-zinc-400 text-xs font-medium">{item.price} ج.م × {equipmentQuantities[item.id] || 1}</p>
+                                      <p className="text-royal-gold text-xs font-bold">{(item.price * (equipmentQuantities[item.id] || 1)).toLocaleString()} ج.م</p>
                                     </div>
                                   )}
-                                  <div className="flex items-center justify-end gap-3">
-                                    <button 
+                                  <div className="flex items-center gap-2.5">
+                                    <button
                                       type="button"
                                       aria-label={`تقليل كمية ${item.name}`}
                                       onClick={() => onQuantityChange(item.id, -1)}
-                                      className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
+                                      className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white text-sm font-bold"
                                     >
                                       -
                                     </button>
-                                    <span className="text-white font-black font-numbers text-xs">{equipmentQuantities[item.id] || 1}</span>
-                                    <button 
+                                    <span className="text-white font-bold font-numbers text-sm min-w-[1.25rem] text-center">{equipmentQuantities[item.id] || 1}</span>
+                                    <button
                                       type="button"
                                       aria-label={`زيادة كمية ${item.name}`}
                                       onClick={() => onQuantityChange(item.id, 1)}
-                                      className="w-6 h-6 rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-xs"
+                                      className="w-7 h-7 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors text-sm font-bold"
                                     >
                                       +
                                     </button>
                                   </div>
                                 </div>
-                                <button type="button" aria-label={`إزالة ${item.name} من السلة`} onClick={() => onRemoveEquipment(item.id)} className="text-zinc-400 hover:text-red-300 transition-colors p-1 flex items-center justify-center">
+                                <button type="button" aria-label={`إزالة ${item.name} من السلة`} onClick={() => onRemoveEquipment(item.id)} className="text-zinc-400 hover:text-red-300 transition-colors p-1.5 flex items-center justify-center shrink-0">
                                   <X className="w-4 h-4" />
                                 </button>
                               </motion.div>
@@ -582,43 +691,41 @@ const FloatingCart: React.FC<{
                         </div>
                       )}
                     </div>
-                    
-                    <div className="mt-6 pt-6 border-t border-white/10 space-y-4">
-                      <div className="flex justify-between items-center flex-row-reverse">
-                        <div className="text-right">
-                          <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest block mb-1">إجمالي الطلب</span>
-                        </div>
-                        <div className="text-left">
-                          <motion.span 
+
+                    <div className="mt-5 pt-5 border-t border-white/10 space-y-4">
+                      <div className="flex justify-between items-center gap-3">
+                        <span className="text-zinc-300 text-sm font-bold">إجمالي الطلب</span>
+                        <div className="flex items-baseline gap-1.5">
+                          <motion.span
                             key={totalPrice}
-                            initial={{ opacity: 0, y: 10 }}
+                            initial={{ opacity: 0, y: 8 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="text-white text-2xl font-black font-numbers tracking-tighter inline-block"
+                            className="text-white text-2xl font-extrabold font-numbers inline-block"
                           >
                             {totalPrice.toLocaleString()}
                           </motion.span>
-                          <span className="text-zinc-500 text-[10px] font-bold uppercase ml-1">ج.م</span>
+                          <span className="text-royal-gold text-xs font-bold">ج.م</span>
                         </div>
                       </div>
-                      
-                      <div className="space-y-3">
+
+                      <div className="space-y-2.5">
                         {(selectedPkg || selectedBeverages.length > 0 || selectedDrinks.length > 0 || selectedExtraServices.length > 0) && (
-                          <motion.button 
+                          <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={onMenuOrder}
-                            className="royal-btn-primary w-full py-4.5 text-xs font-black uppercase tracking-[0.15em] flex items-center justify-center gap-3 shadow-xl"
+                            className="royal-btn-primary w-full py-3.5 text-sm font-extrabold flex items-center justify-center gap-2.5 shadow-xl"
                           >
                             <WhatsAppIcon className="w-4.5 h-4.5 text-black" />
                             <span>تأكيد البيانات وإرسال الطلب</span>
                           </motion.button>
                         )}
                         {selectedEquipItems.length > 0 && (
-                          <motion.button 
+                          <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
                             onClick={() => onShare(selectedEquipItems)}
-                            className="royal-btn-secondary w-full py-3.5 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2.5"
+                            className="royal-btn-secondary w-full py-3 text-xs sm:text-sm font-bold flex items-center justify-center gap-2.5"
                           >
                             <WhatsAppIcon className="w-4 h-4 text-[#25d366]" />
                             <span>طلب المعدات فقط</span>
@@ -629,15 +736,15 @@ const FloatingCart: React.FC<{
                   </>
                 ) : (
                   <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4">
-                    <motion.div 
+                    <motion.div
                       animate={{ rotate: [0, 10, -10, 0] }}
                       transition={{ duration: 5, repeat: Infinity }}
                       className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center text-zinc-600"
                     >
-                      <ShoppingBasket className="w-10 h-10 opacity-20" />
+                      <ShoppingBasket className="w-10 h-10 opacity-25" />
                     </motion.div>
-                    <p className="text-zinc-500 text-xs font-bold">السلة فارغة حالياً</p>
-                    <button onClick={() => { setIsOpen(false); navigateTo('portal'); }} className="text-[#c5a059] text-[10px] font-black uppercase tracking-widest underline">تصفح الضيافة</button>
+                    <p className="text-zinc-400 text-sm font-bold">السلة فارغة حالياً</p>
+                    <button onClick={() => { setIsOpen(false); navigateTo('portal'); }} className="text-[#c5a059] text-sm font-bold underline underline-offset-4">تصفح الضيافة</button>
                   </div>
                 )}
               </div>
@@ -647,23 +754,23 @@ const FloatingCart: React.FC<{
       </AnimatePresence>
 
       {!isOpen && (
-        <motion.button 
+        <motion.button
           layoutId="cart-button"
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsOpen(true)} 
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={() => setIsOpen(true)}
           aria-label="فتح سلة الطلبات"
           aria-expanded={isOpen}
-          className="w-12 h-12 md:w-14 md:h-14 rounded-full shadow-[0_10px_40px_rgba(197,160,89,0.4)] flex items-center justify-center gold-shimmer group relative bg-royal-gold pointer-events-auto"
+          className="w-13 h-13 md:w-15 md:h-15 rounded-full shadow-[0_12px_36px_rgba(197,160,89,0.4)] flex items-center justify-center gold-shimmer group relative bg-royal-gold pointer-events-auto"
         >
           <ShoppingBasket className="w-6 h-6 md:w-7 md:h-7 text-black" />
           {hasItems && (
-            <motion.span 
+            <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              className="absolute -top-1 -right-1 bg-black text-royal-gold w-5 h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[8px] md:text-[10px] font-black border border-royal-gold animate-bounce"
+              className="absolute -top-1 -right-1 bg-black text-royal-gold w-5 h-5 md:w-6 md:h-6 rounded-full flex items-center justify-center text-[10px] md:text-xs font-extrabold font-numbers border border-royal-gold"
             >
               {totalItemsCount}
             </motion.span>
@@ -675,15 +782,15 @@ const FloatingCart: React.FC<{
 };
 
 const NavItem: React.FC<{ id: string; label: string; active: boolean; onClick: () => void }> = ({ id, label, active, onClick }) => (
-  <button onClick={onClick} className={`px-4 py-2 text-[11px] font-black uppercase tracking-[0.2em] transition-all relative ${active ? 'text-[#c5a059]' : 'text-zinc-500 hover:text-white'}`}>
+  <button onClick={onClick} className={`px-4 py-2 text-xs sm:text-sm font-bold transition-all relative ${active ? 'text-[#c5a059]' : 'text-zinc-400 hover:text-white'}`}>
     {label}
     {active && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-royal-gold rounded-full"></span>}
   </button>
 );
 
-const EquipmentCard: React.FC<{ 
-  item: EquipmentItem; 
-  selected: boolean; 
+const EquipmentCard: React.FC<{
+  item: EquipmentItem;
+  selected: boolean;
   quantity: number;
   onToggle: (id: string) => void;
   onQuantityChange: (id: string, delta: number) => void;
@@ -708,186 +815,195 @@ const EquipmentCard: React.FC<{
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      className={`break-inside-avoid bg-[#0c0c0c] border rounded-[2rem] overflow-hidden card-shadow relative group transition-all duration-500 card-3d gsap-card-reveal gsap-card-interactive ${selected ? 'border-royal-gold/40 ring-1 ring-royal-gold/20' : 'border-white/5'}`}
+      className={`h-full flex flex-col bg-[#0c0c0c] border rounded-3xl overflow-hidden card-shadow relative group transition-all duration-500 card-3d gsap-card-reveal gsap-card-interactive ${selected ? 'border-royal-gold/45 ring-1 ring-royal-gold/25' : 'border-white/10'}`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden cursor-zoom-in" onClick={() => { const activeImage = images[currentImgIdx]; if (activeImage) onZoom(activeImage); }}>
+      <div className="relative aspect-[4/3] overflow-hidden cursor-zoom-in bg-[#121212]" onClick={() => { const activeImage = images[currentImgIdx]; if (activeImage) onZoom(activeImage); }}>
         <AnimatePresence mode="wait">
-          <motion.img 
-            key={images[currentImgIdx]}
-            src={images[currentImgIdx]} 
+          <motion.img
+            key={currentImage ?? item.id}
+            src={currentImage ? optimizeCloudinaryImage(currentImage, 720) : LOCAL_IMAGE_FALLBACK}
             srcSet={currentImage ? cloudinarySrcSet(currentImage) : undefined}
             sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-            alt={item.id} 
+            alt={item.name || 'معدات ملوك السعادة'}
+            width={800}
+            height={600}
             loading="lazy"
             decoding="async"
-            initial={{ opacity: 0, scale: 1.1 }}
+            initial={{ opacity: 0, scale: 1.04 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.45, ease: "easeOut" }}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
             referrerPolicy="no-referrer"
-            onError={(e) => {
-              e.currentTarget.src = `https://placehold.co/800x600/111/c5a059?text=${item.id}`;
-            }}
+            onError={handleSafeImageError}
           />
         </AnimatePresence>
-        
+
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 pointer-events-none"></div>
-        
+
         {images.length > 1 && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+          <div className="absolute bottom-3.5 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
             {images.map((_, idx) => (
-              <div 
-                key={idx} 
-                className={`h-1 rounded-full transition-all duration-300 ${idx === currentImgIdx ? 'bg-royal-gold w-6' : 'bg-white/20 w-2'}`}
+              <div
+                key={idx}
+                className={`h-1 rounded-full transition-all duration-300 ${idx === currentImgIdx ? 'bg-royal-gold w-6' : 'bg-white/25 w-2'}`}
               />
             ))}
           </div>
         )}
 
         {!displayOnly && (
-          <button 
+          <button
             type="button"
-            onClick={handleShareSelected}
+            onClick={(e) => { e.stopPropagation(); handleShareSelected(); }}
             aria-label={`طلب ${item.name ?? 'المعدة'} عبر WhatsApp`}
-            className="absolute top-4 right-4 w-11 h-11 min-w-[44px] min-h-[44px] bg-black/60 backdrop-blur-md border border-white/20 text-white rounded-full flex items-center justify-center hover:bg-green-500 hover:border-green-500 transition-all duration-300 group/share"
+            className="absolute top-3.5 right-3.5 w-11 h-11 min-w-[44px] min-h-[44px] bg-black/65 backdrop-blur-md border border-white/20 text-white rounded-full flex items-center justify-center hover:bg-green-500 hover:border-green-500 transition-all duration-300 group/share"
             title="اطلب عبر واتساب"
           >
             <WhatsAppIcon className="w-5 h-5 group-hover/share:scale-110 transition-transform" />
           </button>
         )}
       </div>
-      
-      <div className="p-6">
-        <div className="flex justify-between items-start flex-row-reverse mb-6 gap-4">
-          <div className="text-right flex-1">
-            {item.name && <h4 className="text-white font-black text-base mb-2 font-header whitespace-pre-line leading-tight group-hover:text-royal-gold transition-colors">{item.name}</h4>}
-            {item.price && (
-              <div className="flex items-baseline gap-1.5 flex-row-reverse justify-start">
-                <span className="text-royal-gold font-black text-2xl font-numbers tracking-tighter">{item.price}</span>
-                <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">EGP</span>
-              </div>
-            )}
-            {item.note && <p className="text-[#c5a059]/70 text-[10px] font-bold mt-2 italic">{item.note}</p>}
-          </div>
-        </div>
-        
-        {item.options ? (
-          <div className="space-y-4 mt-4">
-            {item.options.map(opt => {
-              const isOptSelected = selectedItems.includes(opt.id);
-              const optQty = quantities[opt.id] || 1;
-              return (
-                <div key={opt.id} className={`p-5 rounded-[1.5rem] border transition-all duration-300 ${isOptSelected ? 'border-royal-gold/30 bg-royal-gold/5' : 'border-white/5 bg-white/5 hover:bg-white/[0.07]'}`}>
-                  <div className="flex justify-between items-center flex-row-reverse mb-4">
-                    <div className="text-right">
-                      <div className={`text-sm font-black transition-colors ${isOptSelected ? 'text-royal-gold' : 'text-white'}`}>{opt.name}</div>
-                      <div className="text-zinc-500 text-[11px] font-bold font-numbers mt-0.5">{opt.price} EGP</div>
+
+      {(item.name || item.price || item.note || item.options || !displayOnly) && (
+        <div className="p-5 sm:p-6 flex-1 flex flex-col justify-between gap-4">
+          {(item.name || item.price || item.note) && (
+            <div className="text-right">
+              {item.name && <h4 className="text-white font-bold text-base sm:text-lg mb-2 font-header whitespace-pre-line leading-snug group-hover:text-royal-gold transition-colors">{item.name}</h4>}
+              {item.price && (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-royal-gold font-extrabold text-xl sm:text-2xl font-numbers">{item.price}</span>
+                  <span className="text-zinc-400 text-xs font-bold">ج.م</span>
+                </div>
+              )}
+              {item.note && <p className="text-[#c5a059]/85 text-xs font-medium mt-2 leading-relaxed">{item.note}</p>}
+            </div>
+          )}
+
+          {item.options ? (
+            <div className="space-y-3 mt-1">
+              {item.options.map(opt => {
+                const isOptSelected = selectedItems.includes(opt.id);
+                const optQty = quantities[opt.id] || 1;
+                return (
+                  <div key={opt.id} className={`p-4 rounded-2xl border transition-all duration-300 ${isOptSelected ? 'border-royal-gold/40 bg-royal-gold/10' : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.07]'}`}>
+                    <div className="flex justify-between items-center gap-3">
+                      <div className="text-right">
+                        <div className={`text-sm font-bold transition-colors ${isOptSelected ? 'text-royal-gold' : 'text-white'}`}>{opt.name}</div>
+                        <div className="text-zinc-400 text-xs font-bold font-numbers mt-0.5">{opt.price} ج.م</div>
+                      </div>
+                      {!displayOnly && (
+                        <button
+                          type="button"
+                          onClick={() => onToggle(opt.id)}
+                          aria-label={`اختيار ${opt.name}`}
+                          className={`w-9 h-9 shrink-0 rounded-full border flex items-center justify-center transition-all duration-300 ${isOptSelected ? 'bg-royal-gold border-royal-gold shadow-[0_0_15px_rgba(197,160,89,0.3)]' : 'border-white/25 hover:border-white/50'}`}
+                        >
+                          {isOptSelected ? <CheckIcon className="w-5 h-5 text-black" /> : <span className="text-zinc-300 font-bold text-base">+</span>}
+                        </button>
+                      )}
                     </div>
-                    {!displayOnly && (
-                      <button 
-                        onClick={() => onToggle(opt.id)}
-                        className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300 ${isOptSelected ? 'bg-royal-gold border-royal-gold shadow-[0_0_15px_rgba(197,160,89,0.3)]' : 'border-white/20 hover:border-white/40'}`}
-                      >
-                        {isOptSelected && <CheckIcon className="w-5 h-5 text-black" />}
-                      </button>
+
+                    {isOptSelected && !displayOnly && (
+                      <div className="flex items-center justify-between bg-black/60 rounded-xl p-2.5 mt-3 border border-white/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <span className="text-xs font-bold text-zinc-300">الكمية</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onQuantityChange(opt.id, -1)}
+                            className="w-8 h-8 rounded-lg bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all font-bold text-base"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            value={optQty}
+                            onChange={(e) => onQuantitySet(opt.id, parseInt(e.target.value) || 1)}
+                            className="w-14 h-8 bg-white/5 border border-white/15 rounded-lg text-white text-center font-bold font-numbers text-sm focus:border-royal-gold/60 outline-none transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => onQuantityChange(opt.id, 1)}
+                            className="w-8 h-8 rounded-lg bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-base"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
-                  
-                  {isOptSelected && !displayOnly && (
-                    <div className="flex items-center justify-between flex-row-reverse bg-black/60 rounded-2xl p-2.5 border border-white/5 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mr-2">الكمية</span>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => onQuantityChange(opt.id, 1)}
-                          className="w-9 h-9 min-w-[36px] rounded-lg bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-base"
-                        >
-                          +
-                        </button>
-                        <input 
-                          type="number"
-                          min="1"
-                          value={optQty}
-                          onChange={(e) => onQuantitySet(opt.id, parseInt(e.target.value) || 1)}
-                          className="w-14 h-9 bg-white/5 border border-white/10 rounded-lg text-white text-center font-black font-numbers text-base focus:border-royal-gold/50 outline-none transition-colors"
-                        />
-                        <button 
-                          onClick={() => onQuantityChange(opt.id, -1)}
-                          className="w-9 h-9 min-w-[36px] rounded-lg bg-white/5 text-white flex items-center justify-center hover:bg-white/10 transition-all font-bold text-base"
-                        >
-                          -
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : !displayOnly ? (
-          <div className="space-y-5">
-            <div className="flex items-center justify-between flex-row-reverse bg-white/5 rounded-2xl p-4 border border-white/5 group-hover:border-white/10 transition-colors">
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">الكمية المطلوبة</span>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onQuantityChange(item.id, 1); }}
-                  className="w-10 h-10 rounded-xl bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-xl"
-                >
-                  +
-                </button>
-                <input 
-                  type="number"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => onQuantitySet(item.id, parseInt(e.target.value) || 1)}
-                  className="w-20 h-10 bg-white/5 border border-white/10 rounded-xl text-white text-center font-black font-numbers text-lg focus:border-royal-gold/50 outline-none transition-colors"
-                />
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onQuantityChange(item.id, -1); }}
-                  className="w-10 h-10 rounded-xl bg-white/5 text-white flex items-center justify-center hover:bg-white/10 transition-all font-bold text-xl"
-                >
-                  -
-                </button>
-              </div>
+                );
+              })}
             </div>
+          ) : !displayOnly ? (
+            <div className="space-y-3.5 mt-auto pt-2">
+              <div className="flex items-center justify-between bg-white/5 rounded-2xl p-3 border border-white/10 group-hover:border-white/15 transition-colors">
+                <span className="text-xs font-bold text-zinc-300">الكمية المطلوبة</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onQuantityChange(item.id, -1); }}
+                    className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all font-bold text-lg"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => onQuantitySet(item.id, parseInt(e.target.value) || 1)}
+                    className="w-16 h-9 bg-white/5 border border-white/15 rounded-xl text-white text-center font-bold font-numbers text-base focus:border-royal-gold/60 outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onQuantityChange(item.id, 1); }}
+                    className="w-9 h-9 rounded-xl bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-lg"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
 
-            <button 
-              onClick={() => onToggle(item.id)}
-              className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-[0.15em] transition-all duration-300 shadow-xl flex items-center justify-center gap-2.5 ${
-                selected 
-                  ? 'royal-btn-primary scale-[1.01]' 
-                  : 'royal-btn-secondary hover:border-royal-gold/60'
-              }`}
-            >
-              {selected ? (
-                <>
-                  <CheckIcon className="w-4.5 h-4.5 text-black" />
-                  <span>تمت الإضافة للسلة</span>
-                </>
-              ) : (
-                <>
-                  <ChafingDishIcon className="w-4.5 h-4.5 text-royal-gold" />
-                  <span>إضافة للطلب الآن</span>
-                </>
-              )}
-            </button>
-          </div>
-        ) : null}
-      </div>
+              <button
+                type="button"
+                onClick={() => onToggle(item.id)}
+                className={`w-full py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 shadow-xl flex items-center justify-center gap-2.5 ${
+                  selected
+                    ? 'royal-btn-primary scale-[1.01]'
+                    : 'royal-btn-secondary hover:border-royal-gold/60'
+                }`}
+              >
+                {selected ? (
+                  <>
+                    <CheckIcon className="w-4.5 h-4.5 text-black" />
+                    <span>تمت الإضافة للسلة</span>
+                  </>
+                ) : (
+                  <>
+                    <ChafingDishIcon className="w-4.5 h-4.5 text-royal-gold" />
+                    <span>إضافة للطلب الآن</span>
+                  </>
+                )}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <AnimatePresence>
         {selected && (
-          <motion.div 
+          <motion.div
             initial={{ scale: 0, rotate: -45 }}
             animate={{ scale: 1, rotate: 0 }}
             exit={{ scale: 0, rotate: -45 }}
-            className="absolute top-4 left-4 bg-royal-gold text-black w-10 h-10 rounded-full shadow-2xl gold-shimmer flex items-center justify-center z-10 border-2 border-black/20"
+            className="absolute top-3.5 left-3.5 bg-royal-gold text-black w-10 h-10 rounded-full shadow-2xl gold-shimmer flex items-center justify-center z-10 border-2 border-black/20"
           >
-            <CheckIcon className="w-6 h-6" />
+            <CheckIcon className="w-5 h-5" />
           </motion.div>
         )}
       </AnimatePresence>
@@ -895,14 +1011,50 @@ const EquipmentCard: React.FC<{
   );
 };
 
+// Only cart selections are stored locally; customer details and transient inquiry state are never persisted.
+const CART_STORAGE_KEY = 'molok-cart-v1';
+const equipmentIds = new Set(EQUIPMENT_DATA.flatMap(cat => [
+  ...(cat.quickSelections ?? []).map(item => item.id),
+  ...[...(cat.items ?? []), ...(cat.sections ?? []).flatMap(section => section.items)].flatMap(item => [item.id, ...(item.options ?? []).map(option => option.id)])
+]));
+const serviceNames = new Set(SERVICE_SECTIONS.flatMap(section => section.items));
+const beverageNames = new Set(BEVERAGES_MENU.filter(pkg => !pkg.perPerson).flatMap(pkg => pkg.sections.flatMap(section => section.items)));
+const drinkNames = new Set(SOFT_DRINKS.map(item => item.name));
+const safeSelection = (value: unknown, valid: Set<string>): string[] =>
+  Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === 'string' && valid.has(item)))] : [];
+const safeQuantities = (value: unknown, valid: Set<string>): Record<string, number> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter(([key, quantity]) => valid.has(key) && typeof quantity === 'number' && Number.isFinite(quantity) && quantity > 0).map(([key, quantity]) => [key, Math.min(10000, normalizeQuantity(quantity))]));
+};
+const readCart = () => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CART_STORAGE_KEY) || '{}');
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.version !== 1) return null;
+    return {
+      calcPax: clampGuestCount(raw.calcPax),
+      selectedPkgId: BEVERAGES_MENU.some(pkg => pkg.id === raw.selectedPkgId) ? raw.selectedPkgId as string : '',
+      selectedExtraServices: safeSelection(raw.selectedExtraServices, serviceNames),
+      selectedDrinks: safeSelection(raw.selectedDrinks, drinkNames),
+      drinkQuantities: safeQuantities(raw.drinkQuantities, drinkNames),
+      selectedBeverages: safeSelection(raw.selectedBeverages, beverageNames),
+      beverageQuantities: safeQuantities(raw.beverageQuantities, beverageNames),
+      selectedEquipment: safeSelection(raw.selectedEquipment, equipmentIds),
+      equipmentQuantities: safeQuantities(raw.equipmentQuantities, equipmentIds),
+      serviceQuantities: safeQuantities(raw.serviceQuantities, serviceNames)
+    };
+  } catch { return null; }
+};
+
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>('home');
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const activeCategory = useMemo(
-    () => PORTAL_CATEGORIES.find((category) => category.id === categoryId)?.data ?? [],
+  const activeCategoryMeta = useMemo(
+    () => PORTAL_CATEGORIES.find((category) => category.id === categoryId) ?? null,
     [categoryId]
   );
-  const categoryName = PORTAL_CATEGORIES.find((category) => category.id === categoryId)?.id ?? '';
+  const activeCategory = activeCategoryMeta?.data ?? [];
+  const categoryName = activeCategoryMeta?.id ?? '';
+  const categoryDisplayName = activeCategoryMeta?.displayName ?? 'الضيافة';
   const [activeEquipmentCat, setActiveEquipmentCat] = useState<EquipmentCategory | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const [showHeader, setShowHeader] = useState(true);
@@ -912,7 +1064,7 @@ const App: React.FC = () => {
     : view === 'portal'
       ? 'الضيافة'
       : view === 'category'
-        ? PORTAL_CATEGORIES.find((category) => category.id === categoryId)?.displayName ?? 'الضيافة'
+        ? categoryDisplayName
         : view === 'tools'
           ? activeEquipmentCat?.name ?? 'المعدات'
           : 'تواصل معنا';
@@ -926,9 +1078,6 @@ const App: React.FC = () => {
       : `${pageTitle} | ملوك السعادة`;
   }, [pageTitle, view]);
 
-  // Parallax scroll effect for hanging lamp (factor of -0.1)
-  const { scrollY } = useScroll();
-  const lampY = useTransform(scrollY, [0, 1000], [0, -100]);
   const prefersReducedMotion = useReducedMotion() === true;
 
   // Scroll visibility handling - smooth hide on scroll down
@@ -1016,16 +1165,23 @@ const App: React.FC = () => {
     );
   };
 
-  const [calcPax, setCalcPax] = useState(25);
-  const [selectedPkgId, setSelectedPkgId] = useState<string>('');
-  const [selectedExtraServices, setSelectedExtraServices] = useState<string[]>([]);
-  const [selectedDrinks, setSelectedDrinks] = useState<string[]>([]);
-  const [drinkQuantities, setDrinkQuantities] = useState<Record<string, number>>({});
-  const [selectedBeverages, setSelectedBeverages] = useState<string[]>([]);
-  const [beverageQuantities, setBeverageQuantities] = useState<Record<string, number>>({});
-  const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]);
-  const [equipmentQuantities, setEquipmentQuantities] = useState<Record<string, number>>({});
-  const [serviceQuantities, setServiceQuantities] = useState<Record<string, number>>({});
+  const [savedCart] = useState(readCart);
+  const [equipmentSearch, setEquipmentSearch] = useState('');
+  const [calcPax, setCalcPax] = useState(savedCart?.calcPax ?? 25);
+  const [selectedPkgId, setSelectedPkgId] = useState<string>(savedCart?.selectedPkgId ?? '');
+  const [selectedExtraServices, setSelectedExtraServices] = useState<string[]>(savedCart?.selectedExtraServices ?? []);
+  const [selectedDrinks, setSelectedDrinks] = useState<string[]>(savedCart?.selectedDrinks ?? []);
+  const [drinkQuantities, setDrinkQuantities] = useState<Record<string, number>>(savedCart?.drinkQuantities ?? {});
+  const [selectedBeverages, setSelectedBeverages] = useState<string[]>(savedCart?.selectedBeverages ?? []);
+  const [beverageQuantities, setBeverageQuantities] = useState<Record<string, number>>(savedCart?.beverageQuantities ?? {});
+  const [selectedEquipment, setSelectedEquipment] = useState<string[]>(savedCart?.selectedEquipment ?? []);
+  const [equipmentQuantities, setEquipmentQuantities] = useState<Record<string, number>>(savedCart?.equipmentQuantities ?? {});
+  const [serviceQuantities, setServiceQuantities] = useState<Record<string, number>>(savedCart?.serviceQuantities ?? {});
+  useEffect(() => {
+    try {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify({ version: 1, calcPax, selectedPkgId, selectedExtraServices, selectedDrinks, drinkQuantities, selectedBeverages, beverageQuantities, selectedEquipment, equipmentQuantities, serviceQuantities }));
+    } catch { /* Storage may be disabled or full; the cart still works for this visit. */ }
+  }, [calcPax, selectedPkgId, selectedExtraServices, selectedDrinks, drinkQuantities, selectedBeverages, beverageQuantities, selectedEquipment, equipmentQuantities, serviceQuantities]);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -1036,12 +1192,12 @@ const App: React.FC = () => {
   const isEquipmentOnlyOrder = orderContext.kind === 'equipment-inquiry';
   const [customerInfo, setCustomerInfo] = useState({ ...EMPTY_CUSTOMER_INFO });
   const [orderNotice, setOrderNotice] = useState('');
-  
+
   // Scroll to top on view change
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' });
   }, [view, activeCategory, activeEquipmentCat, prefersReducedMotion]);
-  
+
   useEffect(() => {
     setSelectedBeverages([]);
     setBeverageQuantities({});
@@ -1395,64 +1551,69 @@ const App: React.FC = () => {
         <div className="absolute top-[15%] left-[-15%] w-[55vw] h-[55vw] md:w-[35vw] md:h-[35vw] bg-[radial-gradient(circle,rgba(197,160,89,0.06)_0%,transparent_70%)] blur-[100px] rounded-full animate-float-glow-1" />
         <div className="absolute top-[50%] right-[-10%] w-[60vw] h-[60vw] md:w-[40vw] md:h-[40vw] bg-[radial-gradient(circle,rgba(197,160,89,0.05)_0%,transparent_70%)] blur-[130px] rounded-full animate-float-glow-2" />
         <div className="absolute bottom-[10%] left-[10%] w-[45vw] h-[45vw] bg-[radial-gradient(circle,rgba(255,255,255,0.02)_0%,transparent_70%)] blur-[110px] rounded-full animate-float-glow-1" />
-        
+
         {/* Subtle royal dot-mesh pattern drawn on the background */}
         <div className="absolute inset-0 bg-[radial-gradient(rgba(197,160,89,0.02)_1.5px,transparent_1.5px)] [background-size:32px_32px] opacity-40" />
       </div>
 
-      <header 
-        id="royal-header-main" 
-        className={`fixed top-0 inset-x-0 z-[110] transition-all duration-500 ease-out px-3 sm:px-8 md:px-12 pr-[37px] pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 md:py-6 flex items-center justify-center bg-transparent ${
+      <header
+        id="royal-header-main"
+        className={`fixed top-0 inset-x-0 z-[110] transition-all duration-500 ease-out px-3 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 flex items-center justify-center ${
           showHeader ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-full opacity-0 pointer-events-none'
         }`}
       >
-        {/* Right Action: Cart Button (Only shown when not on home page) */}
-        {view !== 'home' && (
-          <div className="absolute right-3 sm:right-6 md:right-10 top-[max(0.75rem,env(safe-area-inset-top))] md:top-1/2 md:-translate-y-1/2 flex items-center justify-center z-10">
-            <motion.button 
+        <div
+          className={`flex items-center justify-between gap-2 sm:gap-5 px-3 sm:px-6 py-1.5 sm:py-2 rounded-full transition-all duration-300 max-w-full ${
+            scrolled
+              ? 'nav-glass shadow-[0_12px_36px_rgba(0,0,0,0.75)]'
+              : 'bg-black/45 backdrop-blur-md border border-white/10 shadow-[0_8px_24px_rgba(0,0,0,0.45)]'
+          }`}
+        >
+          {/* Navigation Links */}
+          <nav aria-label="القائمة الرئيسية" className="flex items-center justify-center gap-1 sm:gap-3 md:gap-5">
+            {NAV_ITEMS.map((nav) => {
+              const isCurrent = view === nav.v || (nav.v === 'portal' && view === 'category');
+              return (
+                <button
+                  key={nav.v}
+                  type="button"
+                  aria-current={isCurrent ? 'page' : undefined}
+                  onClick={() => navigateTo(nav.v)}
+                  className={`min-h-[42px] px-2.5 sm:px-3.5 text-xs sm:text-sm md:text-[15px] transition-colors relative py-1 whitespace-nowrap rounded-full ${
+                    isCurrent
+                      ? 'text-royal-gold font-extrabold'
+                      : 'text-zinc-200 hover:text-white font-semibold'
+                  }`}
+                >
+                  {nav.l}
+                  {isCurrent && (
+                    <span className="absolute bottom-1 inset-x-2.5 h-0.5 bg-royal-gold rounded-full shadow-[0_0_8px_#c5a059]" />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Cart Button (shown when not on home page) */}
+          {view !== 'home' && (
+            <motion.button
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setIsCartOpen(true)}
               aria-label="سلة الطلبات"
-              className="w-11 h-11 min-w-[44px] min-h-[44px] !pt-0 flex items-center justify-center touch-manipulation focus:outline-none cursor-pointer"
+              className="w-10 h-10 min-w-[40px] min-h-[40px] shrink-0 rounded-full royal-btn-secondary !p-0 flex items-center justify-center text-white shadow-lg transition-all group relative border border-royal-gold/30"
             >
-              <div className="w-8.5 h-8.5 sm:w-9.5 sm:h-9.5 md:w-11 md:h-11 rounded-full royal-btn-secondary !p-0 flex items-center justify-center text-white shadow-lg transition-all group relative border border-white/10">
-                <ShoppingBasket className="w-4 h-4 sm:w-4.5 sm:h-4.5 md:w-5 md:h-5 text-royal-gold group-hover:text-white transition-colors" />
-                {(selectedEquipment.length + selectedBeverages.length + (selectedPkgId ? 1 : 0) + selectedDrinks.length + selectedExtraServices.length) > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-royal-gold text-black w-4 h-4 rounded-full flex items-center justify-center text-[8.5px] font-black border border-black shadow-md font-numbers">
-                    {selectedEquipment.length + selectedBeverages.length + (selectedPkgId ? 1 : 0) + selectedDrinks.length + selectedExtraServices.length}
-                  </span>
-                )}
-              </div>
-            </motion.button>
-          </div>
-        )}
-
-        {/* Center/Main Navigation */}
-        <nav aria-label="القائمة الرئيسية" className="flex items-center justify-center gap-4 sm:gap-8 md:gap-10 mx-auto">
-          {NAV_ITEMS.map((nav) => {
-            const isCurrent = view === nav.v || (nav.v === 'portal' && view === 'category');
-            return (
-            <button
-              key={nav.v} 
-              type="button"
-              aria-current={isCurrent ? 'page' : undefined}
-              onClick={() => navigateTo(nav.v)}
-              className={`min-h-[44px] min-w-[44px] text-xs md:text-sm font-bold tracking-wide transition-colors relative py-1 whitespace-nowrap drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] ${
-                isCurrent
-                  ? 'text-royal-gold font-black' 
-                  : 'text-zinc-300 hover:text-white'
-              }`}
-            >
-              {nav.l}
-              {isCurrent && (
-                <span className="absolute bottom-0 inset-x-0 h-0.5 bg-royal-gold rounded-full shadow-[0_0_8px_#c5a059]" />
+              <ShoppingBasket className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-royal-gold group-hover:text-white transition-colors" />
+              {(selectedEquipment.length + selectedBeverages.length + (selectedPkgId ? 1 : 0) + selectedDrinks.length + selectedExtraServices.length) > 0 && (
+                <span className="absolute -top-1 -left-1 bg-royal-gold text-black w-4.5 h-4.5 rounded-full flex items-center justify-center text-[10px] font-extrabold border border-black shadow-md font-numbers">
+                  {selectedEquipment.length + selectedBeverages.length + (selectedPkgId ? 1 : 0) + selectedDrinks.length + selectedExtraServices.length}
+                </span>
               )}
-            </button>
-          );})}
-        </nav>
+            </motion.button>
+          )}
+        </div>
       </header>
 
       <main id="main-content" className="min-h-screen" tabIndex={-1}>
@@ -1460,90 +1621,93 @@ const App: React.FC = () => {
         {view === 'home' && (
           <div className="animate-in fade-in duration-1000">
             {/* Hero Section */}
-            <section className="relative min-h-[92vh] md:min-h-[95vh] flex flex-col justify-between items-center overflow-hidden pt-20 md:pt-24 pb-12 md:pb-16">
+            <section className="relative min-h-[90svh] md:min-h-[94vh] flex flex-col justify-between items-center overflow-hidden pt-20 sm:pt-24 pb-12 md:pb-16">
                {/* Premium Background Image with Luxury Vignette and Gradients */}
                <div className="absolute inset-0 z-0 select-none pointer-events-none bg-[#050505]">
                  <picture className="w-full h-full block">
                    <source media="(min-width: 768px)" srcSet={cloudinarySrcSet("https://res.cloudinary.com/dhktkzpap/image/upload/v1784323411/bfe5c1c7-4080-44dc-bd9a-80f243fc9122_ne8rrq.png")} sizes="100vw" />
-                   <img 
+                   <img
                      src={optimizeCloudinaryImage("https://res.cloudinary.com/dhktkzpap/image/upload/v1784656446/d88ceec3-56ac-422e-a7ad-812f3f216698_tf7hyo.png", 960)}
                      srcSet={cloudinarySrcSet("https://res.cloudinary.com/dhktkzpap/image/upload/v1784656446/d88ceec3-56ac-422e-a7ad-812f3f216698_tf7hyo.png")}
                      sizes="100vw"
-                     alt="Molok El Saada Chafing Dish" 
-                     className="w-full h-full object-cover object-center scale-100 filter brightness-[0.85] contrast-[1.05]" 
+                     alt=""
+                     aria-hidden="true"
+                     width={1440}
+                     height={900}
+                     className="w-full h-full object-cover object-center scale-100 filter brightness-[0.85] contrast-[1.05]"
                      loading="eager"
                      fetchPriority="high"
                      decoding="async"
                      referrerPolicy="no-referrer"
+                     onError={(e) => {
+                       e.currentTarget.style.display = 'none';
+                     }}
                    />
                  </picture>
-                 {/* Cinematic gradient overlay that keeps the center-bottom (chafing dish) visible while darkening top and bottom */}
-                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/35 to-[#050505]"></div>
-                 {/* Radial lens vignette focusing on the chafing dish center */}
+                 <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-[#050505]"></div>
                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.15)_0%,rgba(5,5,5,0.9)_100%)]"></div>
                </div>
 
-               {/* Top Block: Logo and Subtitle positioned perfectly below the navigation bar */}
-               <div className="container mx-auto px-6 flex flex-col justify-between items-center text-center relative z-10 flex-grow">
-                  <motion.div 
+               {/* Hero Content */}
+               <div className="royal-container flex flex-col justify-between items-center text-center relative z-10 flex-grow">
+                  <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.8 }}
-                    className="flex flex-col items-center pt-28 md:pt-44 relative z-20 w-full mb-8 md:mb-12"
+                    className="flex flex-col items-center relative z-20 w-full mb-6 md:mb-10"
                   >
-                    {/* Interactive Parallax Hanging Lamp above the logo */}
-                    <motion.div 
-                      style={{ y: lampY }}
-                      className="absolute top-[-160px] md:top-[-240px] left-1/2 -translate-x-1/2 z-10 w-[200px] md:w-[280px] pointer-events-none origin-top select-none"
-                      initial={{ opacity: 0, y: -50 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 1.2, ease: "easeOut" }}
+                    {/* Keep the chandelier and logo centered in the same layout flow. */}
+                    <div
+                      aria-hidden="true"
+                      className="relative z-10 w-[105px] sm:w-[130px] md:w-[160px] pointer-events-none select-none shrink-0"
                     >
-                      <img 
-                        src="https://road9media.com/templates/r9/images/furnitures/lamp.png" 
-                        alt="Royal Chandelier" 
-                        className="w-full h-auto drop-shadow-[0_15px_35px_rgba(197,160,89,0.35)] filter brightness-110 contrast-105"
+                      <img
+                        src={LOCAL_LAMP_ASSET}
+                        alt=""
+                        width={280}
+                        height={340}
+                        loading="eager"
                         decoding="async"
-                        referrerPolicy="no-referrer"
+                        className="w-full h-auto drop-shadow-[0_15px_35px_rgba(197,160,89,0.4)]"
                       />
-                      {/* Realistic Light Cone Emission shining down and illuminating the logo */}
-                      <div className="absolute top-[85%] left-1/2 -translate-x-1/2 w-[300px] md:w-[450px] h-[400px] md:h-[550px] bg-[radial-gradient(ellipse_at_top,rgba(197,160,89,0.5)_0%,rgba(197,160,89,0.15)_40%,transparent_70%)] blur-3xl pointer-events-none rounded-full mix-blend-screen origin-top scale-y-[1.4]" />
-                      <div className="absolute top-[88%] left-1/2 -translate-x-1/2 w-[200px] md:w-[300px] h-[300px] md:h-[420px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.5)_0%,rgba(197,160,89,0.22)_30%,transparent_65%)] blur-xl pointer-events-none rounded-full mix-blend-screen origin-top scale-y-[1.3] animate-pulse" style={{ animationDuration: '4s' }} />
-                    </motion.div>
+                      <div className="absolute top-[85%] left-1/2 -translate-x-1/2 w-[280px] md:w-[440px] h-[360px] md:h-[520px] bg-[radial-gradient(ellipse_at_top,rgba(197,160,89,0.5)_0%,rgba(197,160,89,0.15)_40%,transparent_70%)] blur-3xl pointer-events-none rounded-full mix-blend-screen origin-top scale-y-[1.4]" />
+                      <div className="absolute top-[88%] left-1/2 -translate-x-1/2 w-[180px] md:w-[290px] h-[280px] md:h-[400px] bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.5)_0%,rgba(197,160,89,0.22)_30%,transparent_65%)] blur-xl pointer-events-none rounded-full mix-blend-screen origin-top scale-y-[1.3] animate-pulse" style={{ animationDuration: '4s' }} />
+                    </div>
 
                     <motion.div
                       initial={{ rotate: -540, scale: 0.5, opacity: 0 }}
                       animate={{ rotate: 0, scale: 1, opacity: 1 }}
-                      transition={{ 
+                      transition={{
                         rotate: { type: "spring", stiffness: 280, damping: 25 },
                         scale: { type: "spring", stiffness: 280, damping: 25 },
                         opacity: { duration: 0.4 }
                       }}
-                      className="hover:scale-105 transition-transform duration-700 cursor-pointer relative z-20"
+                      className="-mt-5 sm:-mt-6 hover:scale-105 transition-transform duration-700 relative z-20"
                     >
-                      <BrandLogo className="w-48 h-48 md:w-64 md:h-64 drop-shadow-[0_0_55px_rgba(197,160,89,0.55)]" showGlow={true} imgStyle={{ marginTop: '-40px' }} />
+                      <BrandLogo className="w-44 h-44 sm:w-52 sm:h-52 md:w-60 md:h-60 drop-shadow-[0_0_55px_rgba(197,160,89,0.55)]" showGlow={true} eager={true} />
                     </motion.div>
-                   
-                    {/* ROYAL CATERING SINCE 2015 placed immediately under the logo */}
-                    <motion.div 
+
+                    {/* Tagline */}
+                    <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       whileInView={{ opacity: 1, y: 0 }}
                       viewport={{ once: true }}
                       transition={{ delay: 0.3, duration: 0.6 }}
-                      className="text-white font-numbers text-[12px] md:text-[15px] font-black uppercase tracking-[0.35em] whitespace-nowrap drop-shadow-[0_2px_8px_rgba(0,0,0,1)] text-center mt-2"
+                      dir="ltr"
+                      className="text-zinc-100 font-numbers text-[11px] sm:text-xs md:text-sm font-extrabold uppercase tracking-[0.28em] drop-shadow-[0_2px_8px_rgba(0,0,0,1)] text-center mt-2"
                     >
                       Royal Catering Since 2015
                     </motion.div>
                   </motion.div>
 
-                  {/* Bottom Block: Description and CTA Buttons positioned beautifully at the bottom */}
-                  <motion.div 
+                  {/* Bottom Block: Description and CTA Buttons */}
+                  <motion.div
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.8, delay: 0.2 }}
-                    className="max-w-4xl flex flex-col items-center justify-center mt-auto"
+                    className="max-w-3xl flex flex-col items-center justify-center mt-auto w-full"
                   >
                     {/* Royal Gold Decorative Divider SVG */}
                     <motion.div
@@ -1551,59 +1715,59 @@ const App: React.FC = () => {
                       whileInView={{ opacity: 1, scale: 1 }}
                       viewport={{ once: true }}
                       transition={{ delay: 0.4, duration: 0.8 }}
-                      className="my-5 md:my-7 flex justify-center items-center pointer-events-none select-none"
+                      className="my-4 md:my-6 flex justify-center items-center pointer-events-none select-none"
                     >
-                      <svg 
-                        width="200" 
-                        height="46" 
-                        viewBox="0 0 150 35" 
-                        fill="none" 
-                        stroke="#c5a059" 
+                      <svg
+                        width="190"
+                        height="44"
+                        viewBox="0 0 150 35"
+                        fill="none"
+                        stroke="#c5a059"
                         strokeWidth="1.2"
-                        strokeLinecap="round" 
+                        strokeLinecap="round"
                         strokeLinejoin="round"
                         className="text-royal-gold drop-shadow-[0_0_15px_rgba(197,160,89,0.5)] opacity-90"
                       >
                         <g transform="translate(145.064 31.002) rotate(180)">
-                          <path 
-                            className="frame-down-1" 
-                            d="M206.648,18.673l5.782-6.08L206.648.5h-.132L200.7,12.593l5.815,6.08Z" 
-                            transform="translate(-134.05)" 
-                            strokeDasharray="43.891536712646484" 
+                          <path
+                            className="frame-down-1"
+                            d="M206.648,18.673l5.782-6.08L206.648.5h-.132L200.7,12.593l5.815,6.08Z"
+                            transform="translate(-134.05)"
+                            strokeDasharray="43.891536712646484"
                             style={{ strokeDashoffset: '0px' }}
                           />
-                          <path 
-                            className="frame-down-2" 
-                            d="M13.849,11.806C12.23,8.634,7.8,8.7,7.8,8.7a7.286,7.286,0,1,0,.066,14.572H58.192a16.577,16.577,0,0,1,7.633,1.85A11.688,11.688,0,0,1,72.5,35.993h.066A11.6,11.6,0,0,1,79.24,25.122a16.478,16.478,0,0,1,7.633-1.85H137.2A7.286,7.286,0,1,0,137.262,8.7s-4.461-.066-6.047,3.139" 
-                            transform="translate(0 -5.49)" 
-                            strokeDasharray="203.66554260253906" 
+                          <path
+                            className="frame-down-2"
+                            d="M13.849,11.806C12.23,8.634,7.8,8.7,7.8,8.7a7.286,7.286,0,1,0,.066,14.572H58.192a16.577,16.577,0,0,1,7.633,1.85A11.688,11.688,0,0,1,72.5,35.993h.066A11.6,11.6,0,0,1,79.24,25.122a16.478,16.478,0,0,1,7.633-1.85H137.2A7.286,7.286,0,1,0,137.262,8.7s-4.461-.066-6.047,3.139"
+                            transform="translate(0 -5.49)"
+                            strokeDasharray="203.66554260253906"
                             style={{ strokeDashoffset: '0px' }}
                           />
                         </g>
                       </svg>
                     </motion.div>
 
-                    {/* Coordinated description with strong readability shadows */}
-                    <p className="text-zinc-100 text-[10px] leading-relaxed max-w-2xl mx-auto mb-10 font-bold drop-shadow-[0_2px_12px_rgba(0,0,0,0.98)] px-4">
+                    {/* Readable Hero Description */}
+                    <p className="text-zinc-100 text-sm sm:text-base md:text-lg leading-relaxed max-w-2xl mx-auto mb-8 sm:mb-9 font-semibold drop-shadow-[0_2px_14px_rgba(0,0,0,0.98)] px-2">
                       نحن متخصصون في تأجير أفخم معدات المناسبات وتقديم أرقى خدمات الضيافة والاستقبال الملكية لتليق بأهم لحظات حياتكم.
                     </p>
 
-                    <div className="flex flex-col sm:flex-row gap-4 md:gap-5 justify-center items-center w-full max-w-md mx-auto">
-                      <motion.button 
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.96 }}
+                    <div className="flex flex-col sm:flex-row gap-3.5 sm:gap-4 justify-center items-stretch sm:items-center w-full max-w-lg mx-auto">
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
                         onClick={() => navigateTo('portal')}
-                        className="royal-btn-primary w-full sm:w-auto flex-1 py-4 px-8 text-xs md:text-sm font-black uppercase tracking-[0.15em] flex items-center justify-center gap-3 select-none"
+                        className="royal-btn-primary w-full sm:w-auto flex-1 min-h-[50px] py-3.5 px-7 text-sm sm:text-base font-extrabold select-none"
                       >
                         <span>استعراض الضيافة</span>
                         <ArrowRight className="w-4 h-4 rotate-180 text-black" />
                       </motion.button>
-                      
-                      <motion.button 
-                        whileHover={{ scale: 1.04 }}
-                        whileTap={{ scale: 0.96 }}
+
+                      <motion.button
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
                         onClick={() => navigateTo('tools', { activeEquipmentCatId: null })}
-                        className="royal-btn-secondary w-full sm:w-auto flex-1 py-4 px-8 text-xs md:text-sm font-black uppercase tracking-[0.15em] flex items-center justify-center gap-3 select-none"
+                        className="royal-btn-secondary w-full sm:w-auto flex-1 min-h-[50px] py-3.5 px-7 text-sm sm:text-base font-bold select-none"
                       >
                         <ChafingDishIcon className="w-4.5 h-4.5 text-royal-gold" />
                         <span>معرض المعدات</span>
@@ -1615,46 +1779,44 @@ const App: React.FC = () => {
 
             {/* Background image section blended with the Chafing Dish section above and the Footer below */}
             <div className="relative bg-[#050505] overflow-hidden">
-              {/* Anti-pixelation smoothing layer with luxury atmospheric treatment */}
               <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none select-none">
-                <img 
+                <img
                   src={optimizeCloudinaryImage("https://res.cloudinary.com/dhktkzpap/image/upload/v1784662591/8aba16bcfe2f755902869df3346ef14a_z565po.jpg", 1440)}
                   srcSet={cloudinarySrcSet("https://res.cloudinary.com/dhktkzpap/image/upload/v1784662591/8aba16bcfe2f755902869df3346ef14a_z565po.jpg")}
                   sizes="100vw"
-                  alt="Atmosphere"
+                  alt=""
+                  aria-hidden="true"
+                  width={1440}
+                  height={960}
                   className="w-full h-full object-cover object-center scale-105 filter blur-[1.5px] md:blur-[2px] brightness-[0.95] contrast-[1.12] opacity-85 md:opacity-80"
                   loading="lazy"
                   decoding="async"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
-
-                {/* Ambient royal golden warmth to enhance the atmosphere and eliminate flat pixelation */}
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(197,160,89,0.16)_0%,rgba(5,5,5,0.75)_100%)] pointer-events-none" />
-
-                {/* Seamless Top Blend connecting smoothly with the hero section above */}
                 <div className="absolute inset-x-0 top-0 h-28 md:h-44 bg-gradient-to-b from-[#050505] via-[#050505]/75 to-transparent pointer-events-none" />
-
-                {/* Seamless Bottom Blend connecting smoothly with the content below */}
                 <div className="absolute inset-x-0 bottom-0 h-28 md:h-44 bg-gradient-to-t from-[#050505] via-[#050505]/75 to-transparent pointer-events-none" />
               </div>
 
               <div className="relative z-10">
-                {/* Redesigned Royal Booking/Reservation Section */}
-                <BookingSection 
+                <BookingSection
                   onBookNow={() => handleStartBooking('appointment')}
                   onBrowseEquipment={() => navigateTo('tools', { activeEquipmentCatId: null })}
                 />
 
                 {/* Gallery Section - Royal Moments */}
-                <section className="py-28 md:py-36 bg-transparent relative overflow-hidden gsap-section">
-                  <div className="container mx-auto px-6 relative z-10">
-                    <div className="text-center mb-24 gsap-reveal">
-                       <h2 className="text-5xl md:text-[5.5rem] font-black text-white font-header mb-6 tracking-tighter leading-none">لحظات <span className="text-royal-gold gold-text-shimmer">ملكية</span></h2>
-                       <div className="w-24 h-1 bg-royal-gold mx-auto mb-8"></div>
-                       <p className="text-[#c5a059] text-xs font-black uppercase tracking-[0.6em] max-w-2xl mx-auto leading-relaxed">Our Pride in Every Detail</p>
+                <section className="py-20 sm:py-24 md:py-32 bg-transparent relative overflow-hidden gsap-section">
+                  <div className="royal-container relative z-10">
+                    <div className="text-center mb-14 md:mb-20 gsap-reveal">
+                       <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white font-header mb-4 leading-tight">لحظات <span className="text-royal-gold gold-text-shimmer">ملكية</span></h2>
+                       <div className="w-20 h-1 bg-royal-gold mx-auto mb-5 rounded-full"></div>
+                       <p dir="ltr" className="text-[#c5a059] text-[11px] sm:text-xs font-bold uppercase tracking-[0.28em] font-numbers max-w-2xl mx-auto">Our Pride in Every Detail</p>
                     </div>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8 gsap-stagger-container">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-5 md:gap-7 gsap-stagger-container">
                       {[
                         { url: 'https://res.cloudinary.com/dqrs3mdmi/image/upload/v1774905127/IMG-20251215-WA0067_1_zc3ofs.jpg', class: 'col-span-2 row-span-2' },
                         { url: 'https://res.cloudinary.com/dqrs3mdmi/image/upload/v1774826480/WhatsApp_Image_2026-03-30_at_1.20.08_AM_3_ophvez.jpg', class: 'col-span-1 row-span-1' },
@@ -1662,39 +1824,63 @@ const App: React.FC = () => {
                         { url: 'https://res.cloudinary.com/dqrs3mdmi/image/upload/v1774826480/WhatsApp_Image_2026-03-30_at_1.20.07_AM_mu08y8.jpg', class: 'col-span-1 row-span-1' },
                         { url: 'https://res.cloudinary.com/dqrs3mdmi/image/upload/v1774826482/WhatsApp_Image_2026-03-30_at_1.20.08_AM_vscdnh.jpg', class: 'col-span-1 row-span-1' },
                       ].map((img, i) => (
-                        <div key={i} className={`${img.class} aspect-square group relative overflow-hidden rounded-[2rem] md:rounded-[3rem] card-shadow border border-white/10 bg-black/50 gsap-stagger-item gsap-card-interactive`}>
+                        <div key={i} className={`${img.class} aspect-square group relative overflow-hidden rounded-3xl md:rounded-[2.25rem] card-shadow border border-white/10 bg-[#111] gsap-stagger-item gsap-card-interactive`}>
                           <img
                             src={optimizeCloudinaryImage(img.url, 960)}
                             srcSet={cloudinarySrcSet(img.url)}
                             sizes={i === 0 ? "(min-width: 1024px) 50vw, 100vw" : "(min-width: 1024px) 25vw, 50vw"}
+                            width={960}
+                            height={960}
                             className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
-                            alt="Royal Event"
+                            alt={`تجهيزات ملوك السعادة للمناسبات ${i + 1}`}
                             loading="lazy"
                             decoding="async"
+                            referrerPolicy="no-referrer"
+                            onError={handleSafeImageError}
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-8">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-5 sm:p-7">
                             <div className="text-right w-full">
-                              <span className="text-royal-gold font-bold text-xs uppercase tracking-widest block mb-2">Molok El Saada</span>
-                              <h4 className="text-white font-black text-lg font-header">الفخامة في كل تفصيلة</h4>
+                              <span dir="ltr" className="text-royal-gold font-bold text-xs uppercase tracking-[0.2em] font-numbers block mb-1.5">Molok El Saada</span>
+                              <h4 className="text-white font-bold text-base sm:text-lg font-header">الفخامة في كل تفصيلة</h4>
                             </div>
                           </div>
-                          <div className="absolute inset-0 border-0 group-hover:border-[8px] border-[#c5a059]/20 transition-all duration-500 rounded-[2rem] md:rounded-[3rem] pointer-events-none"></div>
+                          <div className="absolute inset-0 border-0 group-hover:border-[6px] border-[#c5a059]/20 transition-all duration-500 rounded-3xl md:rounded-[2.25rem] pointer-events-none"></div>
                         </div>
                       ))}
                     </div>
 
-                    <div className="mt-16 flex flex-col md:flex-row items-center justify-center gap-12">
-                       <button onClick={() => navigateTo('portal')} className="group flex items-center gap-4 text-white font-black uppercase tracking-[0.3em] text-xs hover:text-[#c5a059] transition-colors">
-                          <span className="w-12 h-px bg-white/20 group-hover:bg-[#c5a059]/50 transition-colors"></span>
+                    <div className="mt-14 md:mt-16 flex flex-col sm:flex-row items-center justify-center gap-6 sm:gap-12">
+                       <button onClick={() => navigateTo('portal')} className="group flex items-center gap-4 text-white font-bold text-sm sm:text-base hover:text-[#c5a059] transition-colors">
+                          <span className="w-10 sm:w-12 h-px bg-white/25 group-hover:bg-[#c5a059]/60 transition-colors"></span>
                           استكشف خدمات الضيافة
-                          <span className="w-12 h-px bg-white/20 group-hover:bg-[#c5a059]/50 transition-colors"></span>
+                          <span className="w-10 sm:w-12 h-px bg-white/25 group-hover:bg-[#c5a059]/60 transition-colors"></span>
                        </button>
-                       <button onClick={() => navigateTo('tools', { activeEquipmentCatId: null })} className="group flex items-center gap-4 text-white font-black uppercase tracking-[0.3em] text-xs hover:text-[#c5a059] transition-colors">
-                          <span className="w-12 h-px bg-white/20 group-hover:bg-[#c5a059]/50 transition-colors"></span>
+                       <button onClick={() => navigateTo('tools', { activeEquipmentCatId: null })} className="group flex items-center gap-4 text-white font-bold text-sm sm:text-base hover:text-[#c5a059] transition-colors">
+                          <span className="w-10 sm:w-12 h-px bg-white/25 group-hover:bg-[#c5a059]/60 transition-colors"></span>
                           استكشف المعدات
-                          <span className="w-12 h-px bg-white/20 group-hover:bg-[#c5a059]/50 transition-colors"></span>
+                          <span className="w-10 sm:w-12 h-px bg-white/25 group-hover:bg-[#c5a059]/60 transition-colors"></span>
                        </button>
                     </div>
+                  </div>
+                </section>
+                <section className="royal-container py-10" aria-label="استكشف خدماتنا">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                    {[
+                      [String(BEVERAGES_MENU.length), 'باقات مشروبات معروضة'],
+                      [String(EQUIPMENT_DATA.length), 'أقسام في كتالوج المعدات'],
+                      ['واتساب', 'للتواصل وطلب عرض سعر']
+                    ].map(([value, label]) => <div key={label} className="rounded-2xl border border-[#c5a059]/25 bg-[#0c0c0c] p-6"><strong className="block text-2xl font-bold text-[#c5a059]">{value}</strong><span className="text-zinc-300 text-sm">{label}</span></div>)}
+                  </div>
+                </section>
+                <section className="royal-container py-16 sm:py-20" aria-labelledby="faq-title">
+                  <h2 id="faq-title" className="text-center text-3xl sm:text-4xl font-bold font-header text-white mb-8">أسئلة شائعة</h2>
+                  <div className="max-w-3xl mx-auto space-y-3">
+                    {[
+                      ['إزاي أطلب عرض سعر؟', 'اختار احتياجاتك من الضيافة أو المعدات، وأرسل تفاصيل الطلب عبر واتساب. تقدر كمان تطلب استشارة وتقولنا موعد ومكان مناسبتك.'],
+                      ['إيه الخدمات المتاحة؟', 'تقدر تتصفح باقات المشروبات وخدمات الضيافة وكتالوج المعدات من الموقع.'],
+                      ['هل أقدر أعاين المعدات؟', 'أيوه، موقع المكتب والمخازن للمعاينة موجود في صفحة تواصل معنا. تواصل معانا لترتيب التفاصيل.'],
+                      ['هل الأسعار لكل الأصناف ظاهرة؟', 'الأسعار المتاحة موضحة في الكتالوج، وبالنسبة للأصناف بدون سعر تواصل معانا للاستفسار.']
+                    ].map(([question, answer]) => <details key={question} className="rounded-2xl bg-[#0c0c0c] border border-white/10 p-5 text-right"><summary className="cursor-pointer font-bold text-white">{question}</summary><p className="text-zinc-300 mt-3 leading-relaxed">{answer}</p></details>)}
                   </div>
                 </section>
               </div>
@@ -1704,20 +1890,21 @@ const App: React.FC = () => {
         )}
 
         {view === 'portal' && (
-          <div className="container mx-auto px-6 py-32 animate-in slide-in-from-bottom-10 duration-700 gsap-section">
-            <div className="text-center mb-16 gsap-reveal">
-              <h2 className="text-5xl md:text-7xl font-black text-white font-header mb-6">قوائم الضيافة</h2>
-              <p className="text-[#c5a059] text-xs font-black uppercase tracking-[0.6em]">Choose Your Royal Experience</p>
+          <div className="royal-container pt-28 sm:pt-32 pb-24 animate-in slide-in-from-bottom-10 duration-700 gsap-section">
+            <div className="text-center mb-14 md:mb-16 gsap-reveal">
+              <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white font-header mb-4">قوائم الضيافة</h2>
+              <div className="w-20 h-1 bg-royal-gold mx-auto mb-5 rounded-full"></div>
+              <p dir="ltr" className="text-[#c5a059] text-[11px] sm:text-xs font-bold uppercase tracking-[0.28em] font-numbers">Choose Your Royal Experience</p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 gsap-stagger-container">
-                {PORTAL_CATEGORIES.map((cat) => (
-                <button type="button" key={cat.id} onClick={() => openCategory(cat.id)} aria-label={`استعراض ${cat.displayName}`} className="w-full group bg-[#0c0c0c] border border-white/5 p-10 rounded-[3rem] text-center cursor-pointer card-shadow relative overflow-hidden gsap-stagger-item gsap-card-interactive">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 max-w-4xl mx-auto gsap-stagger-container">
+              {PORTAL_CATEGORIES.map((cat) => (
+                <button type="button" key={cat.id} onClick={() => openCategory(cat.id)} aria-label={`استعراض ${cat.displayName}`} className="w-full group bg-[#0c0c0c] border border-white/10 hover:border-[#c5a059]/40 p-8 sm:p-10 md:p-12 rounded-3xl md:rounded-[2.5rem] text-center cursor-pointer card-shadow relative overflow-hidden gsap-stagger-item gsap-card-interactive">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-royal-gold/5 rounded-bl-[10rem] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <span className="text-7xl block mb-8 grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500">{cat.icon}</span>
-                  <h3 className="text-xl font-black text-white group-hover:text-[#c5a059] transition-colors mb-4 font-header">{cat.displayName}</h3>
-                  <p className="text-zinc-400 text-[10px] font-bold uppercase tracking-widest leading-relaxed">{cat.desc}</p>
-                  <div className="mt-10 h-0.5 w-12 bg-zinc-800 mx-auto group-hover:w-24 group-hover:bg-[#c5a059] transition-all"></div>
+                  <span className="text-6xl sm:text-7xl block mb-6 grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500">{cat.icon}</span>
+                  <h3 className="text-2xl sm:text-3xl font-bold text-white group-hover:text-[#c5a059] transition-colors mb-3 font-header">{cat.displayName}</h3>
+                  <p className="text-zinc-300 text-sm sm:text-base font-medium leading-relaxed">{cat.desc}</p>
+                  <div className="mt-8 h-0.5 w-12 bg-zinc-800 mx-auto group-hover:w-24 group-hover:bg-[#c5a059] transition-all"></div>
                 </button>
               ))}
             </div>
@@ -1725,47 +1912,47 @@ const App: React.FC = () => {
         )}
 
         {view === 'category' && (activeCategory.length > 0) && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="container mx-auto px-6 py-32 text-right gsap-section"
+            className="royal-container pt-28 sm:pt-32 pb-24 text-right gsap-section"
           >
-            <div className="flex flex-col md:flex-row justify-between items-center mb-20 gap-8 flex-row-reverse gsap-reveal">
-              <motion.button 
-                whileHover={{ x: 5 }}
-                onClick={() => window.history.back()} 
-                className="group flex items-center gap-3 text-[#c5a059] text-[10px] font-black uppercase tracking-widest"
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-12 md:mb-16 gap-4 pb-6 border-b border-white/10 gsap-reveal">
+              <div className="flex items-center gap-4">
+                <span className="w-1.5 h-10 bg-[#c5a059] rounded-full hidden sm:block"></span>
+                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-header gold-text-shimmer">{categoryDisplayName}</h2>
+              </div>
+              <motion.button
+                whileHover={{ x: 4 }}
+                onClick={() => window.history.back()}
+                className="group flex items-center gap-2.5 text-[#c5a059] text-xs sm:text-sm font-bold"
               >
-                <span className="w-8 h-8 rounded-full border border-[#c5a059]/30 flex items-center justify-center group-hover:bg-[#c5a059] group-hover:text-black transition-all">←</span> العودة للقوائم
+                <span className="w-9 h-9 rounded-full border border-[#c5a059]/30 flex items-center justify-center group-hover:bg-[#c5a059] group-hover:text-black transition-all">
+                  <ArrowRight className="w-4 h-4" />
+                </span>
+                <span>العودة للقوائم</span>
               </motion.button>
-              <h2 className="text-5xl font-black text-white font-header gold-text-shimmer">{categoryName}</h2>
-              <div className="w-24 h-0.5 bg-[#c5a059] hidden md:block"></div>
             </div>
 
-
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 gsap-stagger-container">
+            <div className={`grid grid-cols-1 ${activeCategory.length > 1 ? 'lg:grid-cols-2' : 'max-w-4xl mx-auto'} gap-6 md:gap-8 gsap-stagger-container`}>
               {activeCategory.map((pkg, idx) => (
-                <motion.div 
-                  key={pkg.id} 
+                <motion.div
+                  key={pkg.id}
                   initial={{ opacity: 0, y: 30 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: idx * 0.1 }}
-                  className="bg-[#0c0c0c] border border-white/5 rounded-[2.5rem] p-10 md:p-14 card-shadow relative overflow-hidden flex flex-col group hover:border-royal-gold/20 transition-all duration-500 gsap-stagger-item gsap-card-interactive"
+                  className="bg-[#0c0c0c] border border-white/10 rounded-3xl md:rounded-[2.25rem] p-6 sm:p-8 md:p-10 card-shadow relative overflow-hidden flex flex-col group hover:border-royal-gold/30 transition-all duration-500 gsap-stagger-item gsap-card-interactive"
                 >
-                  <div className="flex justify-between items-start mb-12 flex-wrap gap-6 flex-row-reverse">
+                  <div className="flex justify-between items-start mb-8 sm:mb-10 flex-wrap gap-5">
                     <div className="text-right">
-                      <h3 className="text-3xl font-black text-royal-gold font-header mb-4">{pkg.title}</h3>
-                      <div className="flex gap-2 flex-row-reverse">
-                        {pkg.minPeople && <span className="bg-white/10 text-[9px] font-bold px-3 py-1 rounded-full uppercase text-zinc-300 border border-white/10">Min. {pkg.minPeople} PAX</span>}
+                      <h3 className="text-2xl sm:text-3xl font-bold text-royal-gold font-header mb-3">{pkg.title}</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {pkg.minPeople && <span className="bg-white/10 text-xs font-semibold px-3 py-1 rounded-full text-zinc-200 border border-white/10">أقل عدد <span className="font-numbers font-bold">{pkg.minPeople}</span> فرد</span>}
                         {!pkg.id.startsWith('ad-') && (!pkg.id.startsWith('bev-') || pkg.perPerson) && (
-                          <span className="bg-[#c5a059]/10 text-[9px] font-bold px-3 py-1 rounded-full uppercase text-[#c5a059] border border-[#c5a059]/20">{pkg.perPerson ? 'Per Person' : 'Package Deal'}</span>
+                          <span className="bg-[#c5a059]/10 text-xs font-bold px-3 py-1 rounded-full text-[#c5a059] border border-[#c5a059]/25">{pkg.perPerson ? 'سعر الفرد' : 'باقة متكاملة'}</span>
                         )}
-                        <span className="bg-white/5 text-[9px] font-bold px-3 py-1 rounded-full uppercase text-zinc-400 border border-white/5 italic">
-                          إضافات اختيارية متاحة بالحاسبة
-                        </span>
                       </div>
                     </div>
                     {!pkg.id.startsWith('ad-') && (!pkg.id.startsWith('bev-') || pkg.perPerson) && (
@@ -1776,7 +1963,7 @@ const App: React.FC = () => {
                           const hasPrice = perPersonPrice > 0 || pkg.price > 0;
 
                           if (!hasPrice && pkg.id !== 'srv-cat') {
-                            return <div className="text-2xl font-black text-royal-gold font-header">السعر حسب اليوم</div>;
+                            return <div className="text-xl sm:text-2xl font-bold text-royal-gold font-header">السعر حسب اليوم</div>;
                           }
 
                           if (pkg.id === 'srv-cat') return null;
@@ -1785,11 +1972,11 @@ const App: React.FC = () => {
 
                           return (
                             <>
-                              <div className="text-5xl font-black text-white font-numbers tracking-tighter">{perPersonPrice.toLocaleString()}</div>
-                              <div className="mt-2 text-right lg:text-left">
-                                <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest block">EGP {pkg.perPerson ? '/ Person' : 'Total'}</span>
+                              <div className="text-4xl sm:text-5xl font-extrabold text-white font-numbers tracking-tight">{perPersonPrice.toLocaleString()}</div>
+                              <div className="mt-1.5 text-left">
+                                <span className="text-xs text-zinc-400 font-bold block">ج.م {pkg.perPerson ? '/ للفرد' : 'إجمالي'}</span>
                                 {pkg.perPerson && (
-                                  <span className="text-[10px] text-royal-gold font-bold block mt-1">Total: {total.toLocaleString()} LE (for {calcPax} PAX)</span>
+                                  <span className="text-xs text-royal-gold font-bold block mt-1">الإجمالي: <span className="font-numbers">{total.toLocaleString()}</span> ج.م (<span className="font-numbers">{calcPax}</span> فرد)</span>
                                 )}
                               </div>
                             </>
@@ -1812,18 +1999,18 @@ const App: React.FC = () => {
 
                           if (totalSectionPrice === 0) {
                             return (
-                              <div className="text-right lg:text-left">
-                                <span className="text-royal-gold text-[10px] font-black uppercase tracking-widest block mb-1">اختر الأصناف</span>
-                                <span className="text-zinc-500 text-[9px] font-bold block italic">لحساب التكلفة</span>
+                              <div className="text-right sm:text-left">
+                                <span className="text-royal-gold text-xs font-bold block mb-1">اختر الأصناف</span>
+                                <span className="text-zinc-400 text-xs font-medium block">لحساب التكلفة</span>
                               </div>
                             );
                           }
 
                           return (
                             <>
-                              <div className="text-5xl font-black text-white font-numbers tracking-tighter">{totalSectionPrice.toLocaleString()}</div>
-                              <div className="mt-2 text-right lg:text-left">
-                                <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest block">EGP Total</span>
+                              <div className="text-4xl sm:text-5xl font-extrabold text-white font-numbers tracking-tight">{totalSectionPrice.toLocaleString()}</div>
+                              <div className="mt-1 text-left">
+                                <span className="text-xs text-zinc-400 font-bold block">ج.م إجمالي</span>
                               </div>
                             </>
                           );
@@ -1831,37 +2018,38 @@ const App: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <div className="space-y-12 flex-1">
+                  <div className="space-y-8 sm:space-y-10 flex-1">
                     {pkg.sections.map((sec, i) => (
                       <div key={i} className="text-right">
-                        <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-[#c5a059] mb-6 flex items-center gap-4 flex-row-reverse">
-                          <span className="flex-1 h-px bg-[#c5a059]/10"></span> {sec.name}
+                        <h4 className="text-sm sm:text-base font-bold text-[#c5a059] mb-4 flex items-center gap-3">
+                          <span>{sec.name}</span>
+                          <span className="flex-1 h-px bg-[#c5a059]/20"></span>
                         </h4>
-                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                           {sec.items.map((item, j) => {
                             const isBeverage = pkg.id.startsWith('bev-') && !pkg.perPerson;
                             const isService = pkg.id === 'srv-cat';
-                            
+
                             if (isBeverage || isService) {
                               const isSelected = isBeverage
                                   ? selectedBeverages.includes(item)
                                   : selectedExtraServices.includes(item);
-                              
+
                               const srvData = isService ? SERVICE_COSTS.find(s => s.label === item) : null;
                               const needsQty = isService ? (
-                                item.includes('ويترز') || 
-                                item === 'شيف' || 
-                                item === 'باريستا' || 
-                                item.includes('شب') || 
-                                item.includes('بنت') || 
+                                item.includes('ويترز') ||
+                                item === 'شيف' ||
+                                item === 'باريستا' ||
+                                item.includes('شب') ||
+                                item.includes('بنت') ||
                                 item.includes('اشر') ||
                                 item.includes('هاوس') ||
                                 item.includes('جراب')
                               ) : true;
-                              
+
                               return (
-                                <li key={j} className={`p-4 rounded-2xl border transition-all flex justify-between items-center flex-row-reverse ${isSelected ? 'border-[#c5a059] bg-[#c5a059]/5' : 'border-white/5 text-zinc-400 hover:text-zinc-200'}`}>
-                                    <button type="button" aria-pressed={isSelected} className="flex-1 min-h-[44px] cursor-pointer text-right flex items-center justify-end gap-3" onClick={() => {
+                                <li key={j} className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex justify-between items-center gap-3 ${isSelected ? 'border-[#c5a059] bg-[#c5a059]/10' : 'border-white/10 bg-white/[0.02] text-zinc-300 hover:border-white/20 hover:text-white'}`}>
+                                    <button type="button" aria-pressed={isSelected} className="flex-1 min-h-[44px] cursor-pointer text-right flex items-center justify-between gap-3" onClick={() => {
                                       if (isBeverage) {
                                         setSelectedBeverages(prev => {
                                           if (prev.includes(item)) return prev.filter(s => s !== item);
@@ -1881,36 +2069,36 @@ const App: React.FC = () => {
                                       }
                                     }}>
                                       <div className="text-right">
-                                        <span className={`text-sm font-bold block transition-colors ${isSelected ? 'text-[#c5a059]' : ''}`}>{item}</span>
+                                        <span className={`text-sm font-bold block transition-colors leading-relaxed ${isSelected ? 'text-[#c5a059]' : 'text-zinc-100'}`}>{item}</span>
                                         {isService && srvData && (
-                                          <span className="text-[10px] text-zinc-500 font-numbers">{srvData.price}</span>
+                                          <span className="text-xs text-zinc-400 font-semibold mt-0.5 block">{srvData.price}</span>
                                         )}
                                       </div>
                                       {!isSelected && (
-                                        <span aria-hidden="true" className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-zinc-400 hover:border-royal-gold hover:text-royal-gold transition-all">
+                                        <span aria-hidden="true" className="w-8 h-8 shrink-0 rounded-full border border-white/15 flex items-center justify-center text-zinc-300 hover:border-royal-gold hover:text-royal-gold transition-all font-bold">
                                           +
                                         </span>
                                       )}
                                     </button>
-                                  
+
                                   {isSelected && needsQty && (
-                                    <div className="flex items-center gap-2 bg-black/40 p-1 rounded-lg border border-white/5">
-                                      <button 
+                                    <div className="flex items-center gap-1.5 bg-black/50 p-1 rounded-xl border border-white/10 shrink-0">
+                                      <button
                                         type="button"
-                                        aria-label={`تقليل كمية ${item}`}
+                                        aria-label={`زيادة كمية ${item}`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (isBeverage) {
-                                            setBeverageQuantities(prev => ({ ...prev, [item]: Math.max(1, (prev[item] || 1) - 1) }));
+                                            setBeverageQuantities(prev => ({ ...prev, [item]: (prev[item] || 1) + 1 }));
                                           } else if (isService) {
-                                            setServiceQuantities(prev => ({ ...prev, [item]: Math.max(1, (prev[item] || 1) - 1) }));
+                                            setServiceQuantities(prev => ({ ...prev, [item]: (prev[item] || 1) + 1 }));
                                           }
                                         }}
-                                        className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white text-xs"
+                                        className="w-7 h-7 rounded-lg bg-royal-gold flex items-center justify-center hover:scale-105 transition-transform text-black font-bold text-sm"
                                       >
-                                        -
+                                        +
                                       </button>
-                                      <input 
+                                      <input
                                         aria-label={`كمية ${item}`}
                                         type="number"
                                         min="1"
@@ -1924,22 +2112,22 @@ const App: React.FC = () => {
                                           }
                                         }}
                                         onClick={(e) => e.stopPropagation()}
-                                        className="w-16 min-h-[44px] bg-white/5 border border-white/10 rounded text-white text-center font-numbers font-bold text-base focus:border-royal-gold/50 outline-none"
+                                        className="w-12 h-8 bg-white/5 border border-white/10 rounded-lg text-white text-center font-numbers font-bold text-sm focus:border-royal-gold/50 outline-none"
                                       />
-                                      <button 
+                                      <button
                                         type="button"
-                                        aria-label={`زيادة كمية ${item}`}
+                                        aria-label={`تقليل كمية ${item}`}
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (isBeverage) {
-                                            setBeverageQuantities(prev => ({ ...prev, [item]: (prev[item] || 1) + 1 }));
+                                            setBeverageQuantities(prev => ({ ...prev, [item]: Math.max(1, (prev[item] || 1) - 1) }));
                                           } else if (isService) {
-                                            setServiceQuantities(prev => ({ ...prev, [item]: (prev[item] || 1) + 1 }));
+                                            setServiceQuantities(prev => ({ ...prev, [item]: Math.max(1, (prev[item] || 1) - 1) }));
                                           }
                                         }}
-                                        className="w-6 h-6 rounded-md bg-royal-gold flex items-center justify-center hover:scale-105 transition-transform text-black text-xs"
+                                        className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white font-bold text-sm"
                                       >
-                                        +
+                                        -
                                       </button>
                                     </div>
                                   )}
@@ -1947,8 +2135,8 @@ const App: React.FC = () => {
                               );
                             }
                             return (
-                              <li key={j} className="text-zinc-300 text-sm flex flex-row-reverse items-start gap-3 group/item cursor-default">
-                                <span className="text-[#c5a059] group-hover/item:scale-125 transition-transform mt-1.5">•</span>
+                              <li key={j} className="text-zinc-200 text-sm sm:text-base flex items-start gap-2.5 group/item cursor-default leading-relaxed">
+                                <span className="text-[#c5a059] group-hover/item:scale-125 transition-transform mt-1">•</span>
                                 <span className="group-hover/item:text-white transition-colors">{item}</span>
                               </li>
                             );
@@ -1958,33 +2146,33 @@ const App: React.FC = () => {
                     ))}
                   </div>
                   {pkg.id === 'srv-cat' && (
-                    <div className="mt-12 p-8 bg-royal-gold/5 border border-royal-gold/10 rounded-[2rem] text-right">
-                      <div className="flex items-center gap-4 flex-row-reverse">
-                        <div className="w-10 h-10 rounded-full bg-royal-gold/20 flex items-center justify-center text-royal-gold">
+                    <div className="mt-10 p-6 sm:p-7 bg-royal-gold/5 border border-royal-gold/20 rounded-2xl text-right">
+                      <div className="flex items-center gap-4">
+                        <div className="w-11 h-11 shrink-0 rounded-full bg-royal-gold/20 flex items-center justify-center text-royal-gold">
                           <MapPinIcon className="w-5 h-5" />
                         </div>
                         <div>
-                          <span className="text-royal-gold font-black text-xs block mb-1">النقل وتكاليف التوصيل</span>
-                          <p className="text-zinc-400 text-sm font-bold">يتم تحديد تكلفة النقل حسب موقع المناسبة.</p>
+                          <span className="text-royal-gold font-bold text-sm block mb-1">النقل وتكاليف التوصيل</span>
+                          <p className="text-zinc-300 text-sm font-medium">يتم تحديد تكلفة النقل حسب موقع المناسبة.</p>
                         </div>
                       </div>
                     </div>
                   )}
                   {pkg.id !== 'srv-cat' && (
-                    <div className="mt-14 flex flex-col sm:flex-row gap-3 md:gap-4">
-                      <button 
+                    <div className="mt-10 flex flex-col sm:flex-row gap-3">
+                      <button
                         onClick={() => {
                           setSelectedPkgId(pkg.id);
                           setIsCartOpen(true);
-                        }} 
-                        className="royal-btn-secondary flex-1 py-4 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                        }}
+                        className="royal-btn-secondary flex-1 py-3.5 text-xs sm:text-sm font-bold"
                       >
                         <ShoppingBasket className="w-4 h-4 text-royal-gold" />
                         <span>إضافة للسلة</span>
                       </button>
-                      <button 
-                        onClick={() => handleSharePackage(pkg)} 
-                        className="royal-btn-primary flex-1 py-4 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg"
+                      <button
+                        onClick={() => handleSharePackage(pkg)}
+                        className="royal-btn-primary flex-1 py-3.5 text-xs sm:text-sm font-extrabold shadow-lg"
                       >
                         <WhatsAppIcon className="w-4 h-4 text-black" />
                         <span>اطلب الآن</span>
@@ -1996,16 +2184,16 @@ const App: React.FC = () => {
             </div>
 
             {categoryName === 'Beverages' && (
-              <div className="mt-24 space-y-24 animate-in fade-in slide-in-from-bottom-10 duration-700">
-                {/* PAX Selection restored to Beverages Section */}
-                <motion.div 
+              <div className="mt-16 sm:mt-20 space-y-16 animate-in fade-in slide-in-from-bottom-10 duration-700">
+                {/* PAX Selection */}
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="mb-10 glass-card p-8 rounded-[2.5rem] border border-[#c5a059]/20 card-shadow text-right max-w-2xl mx-auto"
+                  className="glass-card p-6 sm:p-8 rounded-3xl border border-[#c5a059]/25 card-shadow text-right max-w-2xl mx-auto"
                 >
-                  <div className="flex justify-between items-center mb-6 flex-row-reverse">
-                    <label htmlFor="beverage-pax" id="beverage-pax-label" className="text-white font-black font-header">عدد الأفراد (PAX)</label>
-                    <div className="flex items-center gap-2 flex-row-reverse">
+                  <div className="flex justify-between items-center mb-5 gap-4">
+                    <label htmlFor="beverage-pax" id="beverage-pax-label" className="text-white text-lg sm:text-xl font-bold font-header">عدد الأفراد (PAX)</label>
+                    <div className="flex items-center gap-2">
                       <input
                         aria-label="عدد الأفراد في الضيافة"
                         type="number"
@@ -2014,51 +2202,51 @@ const App: React.FC = () => {
                         step="1"
                         value={calcPax}
                         onChange={e => setCalcPax(clampGuestCount(e.target.value))}
-                        className="w-24 min-h-12 bg-white/5 border border-royal-gold/40 rounded-xl px-2 text-center text-royal-gold font-numbers text-2xl font-black focus:border-royal-gold outline-none"
+                        className="w-24 min-h-11 bg-white/5 border border-royal-gold/40 rounded-xl px-2 text-center text-royal-gold font-numbers text-xl sm:text-2xl font-extrabold focus:border-royal-gold outline-none"
                       />
-                      <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">فرد</span>
+                      <span className="text-zinc-400 text-xs sm:text-sm font-bold">فرد</span>
                     </div>
                   </div>
-                  <input 
+                  <input
                     id="beverage-pax"
                     aria-labelledby="beverage-pax-label"
                     aria-valuetext={`${calcPax} فرد`}
-                    type="range" 
-                    min="25" 
-                    max="1000" 
+                    type="range"
+                    min="25"
+                    max="1000"
                     step="1"
-                    value={calcPax} 
-                    onChange={e => setCalcPax(clampGuestCount(e.target.value))} 
-                    className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#c5a059]" 
+                    value={calcPax}
+                    onChange={e => setCalcPax(clampGuestCount(e.target.value))}
+                    className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#c5a059]"
                   />
-                  <div className="flex justify-between mt-4 text-[10px] font-black text-zinc-500 uppercase tracking-widest flex-row-reverse">
-                    <span>1000 PAX</span>
-                    <span>25 PAX</span>
+                  <div className="flex justify-between mt-3 text-xs font-bold text-zinc-400 font-numbers">
+                    <span>25 فرد</span>
+                    <span>1000 فرد</span>
                   </div>
                 </motion.div>
 
                 <div className="text-center">
-                  <h3 className="text-4xl font-black text-white font-header mb-4">
+                  <h3 className="text-3xl sm:text-4xl font-bold text-white font-header mb-4">
                     اختيار مشروبات فردية (بالفرد)
                   </h3>
-                  <div className="w-24 h-1 bg-[#c5a059] mx-auto"></div>
+                  <div className="w-20 h-1 bg-[#c5a059] mx-auto rounded-full"></div>
                 </div>
-                
+
                 {BEVERAGES_CATEGORIES.map((category, catIdx) => (
-                  <div key={catIdx} className="space-y-12">
-                    <div className="flex items-center gap-6 flex-row-reverse">
-                      <h4 className="text-2xl font-black text-royal-gold whitespace-nowrap">{category.name}</h4>
+                  <div key={catIdx} className="space-y-8">
+                    <div className="flex items-center gap-4">
+                      <h4 className="text-xl sm:text-2xl font-bold text-royal-gold font-header whitespace-nowrap">{category.name}</h4>
                       <div className="h-px bg-white/10 flex-1"></div>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
                       {category.items.map((drink, idx) => {
                         const isSelected = selectedDrinks.includes(drink.name);
                         const qty = drinkQuantities[drink.name] || 1;
                         return (
                           <div
                             key={idx}
-                            className={`p-8 rounded-[2.5rem] border transition-all duration-500 flex flex-col justify-between items-center text-center ${isSelected ? 'border-royal-gold bg-royal-gold/5 shadow-royal-gold/10' : 'border-white/5 bg-[#0c0c0c] hover:border-white/10'} card-shadow group`}
+                            className={`p-6 sm:p-7 rounded-3xl border transition-all duration-500 flex flex-col justify-between items-center text-center ${isSelected ? 'border-royal-gold bg-royal-gold/10 shadow-royal-gold/10' : 'border-white/10 bg-[#0c0c0c] hover:border-white/20'} card-shadow group`}
                           >
                             <button
                               type="button"
@@ -2081,46 +2269,46 @@ const App: React.FC = () => {
                                 }
                               }}
                             >
-                              <span aria-hidden="true" className={`w-12 h-12 rounded-full border flex items-center justify-center mb-6 transition-all duration-500 ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/10 group-hover:border-royal-gold/50'}`}>
+                              <span aria-hidden="true" className={`w-12 h-12 rounded-full border flex items-center justify-center mb-4 transition-all duration-500 ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/15 group-hover:border-royal-gold/50'}`}>
                                 {isSelected ? <CheckIcon className="w-6 h-6 text-black" /> : <span className="text-xl">🥤</span>}
                               </span>
-                              <span className={`text-lg font-black mb-2 transition-colors duration-500 ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{drink.name}</span>
-                              <span className="text-zinc-500 text-xs font-numbers font-black tracking-widest">{drink.price} EGP / Item</span>
+                              <span className={`text-base sm:text-lg font-bold mb-1.5 transition-colors duration-500 ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{drink.name}</span>
+                              <span className="text-zinc-400 text-xs sm:text-sm font-bold"><span className="font-numbers text-zinc-200">{drink.price}</span> ج.م / للصنف</span>
                             </button>
-                            
+
                             {isSelected && (
-                              <div className="mt-6 space-y-4 w-full animate-in fade-in zoom-in duration-300">
-                                <div className="flex items-center justify-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5">
-                                  <button
-                                    type="button"
-                                    aria-label={`تقليل كمية ${drink.name}`}
-                                    onClick={(e) => {
-                                      setDrinkQuantities((previous) => ({
-                                        ...previous,
-                                        [drink.name]: normalizeQuantity((previous[drink.name] || 1) - 1)
-                                      }));
-                                    }}
-                                    className="w-11 h-11 rounded-xl bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors text-white font-bold"
-                                  >
-                                    -
-                                  </button>
-                                  <output aria-live="polite" className="text-white font-black font-numbers min-w-[2rem]">{qty}</output>
+                              <div className="mt-5 space-y-3 w-full animate-in fade-in zoom-in duration-300">
+                                <div className="flex items-center justify-center gap-3 bg-black/50 p-2 rounded-2xl border border-white/10">
                                   <button
                                     type="button"
                                     aria-label={`زيادة كمية ${drink.name}`}
-                                    onClick={(e) => {
+                                    onClick={() => {
                                       setDrinkQuantities((previous) => ({
                                         ...previous,
                                         [drink.name]: normalizeQuantity((previous[drink.name] || 1) + 1)
                                       }));
                                     }}
-                                    className="w-11 h-11 rounded-xl bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors font-bold"
+                                    className="w-10 h-10 rounded-xl bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-colors font-bold text-lg"
                                   >
                                     +
                                   </button>
+                                  <output aria-live="polite" className="text-white font-extrabold font-numbers text-base min-w-[2rem]">{qty}</output>
+                                  <button
+                                    type="button"
+                                    aria-label={`تقليل كمية ${drink.name}`}
+                                    onClick={() => {
+                                      setDrinkQuantities((previous) => ({
+                                        ...previous,
+                                        [drink.name]: normalizeQuantity((previous[drink.name] || 1) - 1)
+                                      }));
+                                    }}
+                                    className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors text-white font-bold text-lg"
+                                  >
+                                    -
+                                  </button>
                                 </div>
-                                <div className="text-[10px] font-black text-royal-gold uppercase tracking-[0.2em]">
-                                  Total: {(drink.price * qty).toLocaleString()} LE
+                                <div className="text-xs font-bold text-royal-gold">
+                                  الإجمالي: <span className="font-numbers">{(drink.price * qty).toLocaleString()}</span> ج.م
                                 </div>
                               </div>
                             )}
@@ -2136,36 +2324,36 @@ const App: React.FC = () => {
         )}
 
         {view === 'contact' && (
-          <div className="container mx-auto px-6 py-32 animate-in fade-in duration-1000 text-center gsap-section">
+          <div className="royal-container pt-28 sm:pt-32 pb-24 animate-in fade-in duration-1000 text-center gsap-section">
             <div className="max-w-4xl mx-auto">
-               <div className="flex justify-center mb-16 gsap-reveal">
-                  <BrandLogo className="w-48 h-48 md:w-64 md:h-64" />
+               <div className="flex justify-center mb-12 sm:mb-14 gsap-reveal">
+                  <BrandLogo className="w-40 h-40 sm:w-52 sm:h-52 md:w-56 md:h-56" />
                </div>
 
                {/* Section: About Us (من نحن) */}
-               <div className="mb-40 space-y-24 text-right">
-                 <motion.div 
+               <div className="mb-20 sm:mb-24 space-y-14 sm:space-y-16 text-right">
+                 <motion.div
                    initial={{ opacity: 0, y: 30 }}
                    whileInView={{ opacity: 1, y: 0 }}
                    viewport={{ once: true }}
-                   className="bg-[#0c0c0c] border border-royal-gold/20 p-8 md:p-16 rounded-[3.5rem] relative overflow-hidden card-shadow gsap-card-interactive"
+                   className="bg-[#0c0c0c] border border-royal-gold/25 p-7 sm:p-10 md:p-14 rounded-3xl md:rounded-[2.5rem] relative overflow-hidden card-shadow gsap-card-interactive"
                  >
-                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-royal-gold/40 to-transparent"></div>
-                   <span className="text-royal-gold text-[10px] font-black uppercase tracking-[0.5em] mb-6 block">من نحن</span>
-                   <h3 className="text-white text-3xl md:text-5xl font-black font-header mb-8 leading-tight">ملوك السعادة لخدمات الضيافة</h3>
-                   <div className="space-y-6 text-zinc-300 text-lg md:text-xl leading-relaxed font-light">
-                     <p>منذ عام 2015، وملوك السعادة لخدمات الضيافة والاستقبال بتقدّم تجربة ضيافة متكاملة بمستوى فندقي احترافي.</p>
-                     <p>على مدار سنين اشتغلنا على الاف المناسبات المختلفة والاحداث الكبيرة، وكونّا خبرة حقيقية في إدارة التفاصيل وتقديم خدمة تليق بالعملاء الباحثين عن مستوى أرقي دائما.</p>
+                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-royal-gold/50 to-transparent"></div>
+                   <span className="text-royal-gold text-xs sm:text-sm font-bold mb-3 block">من نحن</span>
+                   <h3 className="text-white text-2xl sm:text-3xl md:text-4xl font-bold font-header mb-6 leading-snug">ملوك السعادة لخدمات الضيافة</h3>
+                   <div className="space-y-4 text-zinc-200 text-base sm:text-lg leading-relaxed font-normal">
+                     <p>منذ عام <span className="font-numbers font-bold text-royal-gold">2015</span>، وملوك السعادة لخدمات الضيافة والاستقبال بتقدّم تجربة ضيافة متكاملة بمستوى فندقي احترافي.</p>
+                     <p>على مدار سنين اشتغلنا على آلاف المناسبات المختلفة والأحداث الكبيرة، وكوّنّا خبرة حقيقية في إدارة التفاصيل وتقديم خدمة تليق بالعملاء الباحثين عن مستوى أرقى دائماً.</p>
                    </div>
                  </motion.div>
 
                  {/* Section: Services (خدماتنا) */}
                  <div>
-                   <div className="flex items-center gap-4 flex-row-reverse mb-12">
-                     <h3 className="text-2xl font-black text-white font-header">خدماتنا</h3>
+                   <div className="flex items-center gap-4 mb-8">
+                     <h3 className="text-2xl sm:text-3xl font-bold text-white font-header">خدماتنا</h3>
                      <div className="h-px bg-white/10 flex-1"></div>
                    </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 gsap-stagger-container">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 gsap-stagger-container">
                      {[
                        { title: 'فريق ضيافة واستقبال', desc: 'ويترز وكباتن بمظهر وسلوك احترافي يشرّف مناسبتك.' },
                        { title: 'تأجير معدات الكاترينج', desc: 'أعلى جودة وتنظيم مع أحدث التصميمات العالمية للبوفيه والمعدات.' },
@@ -2173,168 +2361,184 @@ const App: React.FC = () => {
                        { title: 'كورنر ضيافة عربي', desc: 'تجهيزات فخمة (قهوة عربية – تمور – مباخر – مشروبات تقليدية).' },
                        { title: 'توريدات فندقية', desc: 'حلول متكاملة للمناسبات الكبرى والمشروعات الفندقية.' },
                      ].map((item, i) => (
-                       <motion.div 
+                       <motion.div
                          key={i}
                          initial={{ opacity: 0, x: 20 }}
                          whileInView={{ opacity: 1, x: 0 }}
                          viewport={{ once: true }}
-                         transition={{ delay: i * 0.1 }}
-                         className="bg-white/[0.02] border border-white/5 p-8 rounded-[2.5rem] hover:border-royal-gold/30 transition-all group gsap-stagger-item gsap-card-interactive"
+                         transition={{ delay: i * 0.08 }}
+                         className="bg-white/[0.03] border border-white/10 p-6 sm:p-8 rounded-3xl hover:border-royal-gold/35 transition-all group gsap-stagger-item gsap-card-interactive"
                        >
-                         <h4 className="text-royal-gold font-black mb-3 font-header group-hover:scale-105 transition-transform origin-right">{item.title}</h4>
-                         <p className="text-zinc-400 text-sm leading-relaxed">{item.desc}</p>
+                         <h4 className="text-royal-gold text-lg sm:text-xl font-bold mb-2.5 font-header">{item.title}</h4>
+                         <p className="text-zinc-300 text-sm sm:text-base leading-relaxed">{item.desc}</p>
                        </motion.div>
                      ))}
                    </div>
                  </div>
 
                  {/* Section: Vision & System (رؤيتنا ونظام الخدمة) */}
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 gsap-stagger-container">
-                   <motion.div 
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 gsap-stagger-container">
+                   <motion.div
                      initial={{ opacity: 0, scale: 0.95 }}
                      whileInView={{ opacity: 1, scale: 1 }}
                      viewport={{ once: true }}
-                     className="bg-royal-gold/5 border border-royal-gold/20 p-10 rounded-[3rem] relative gsap-stagger-item gsap-card-interactive"
+                     className="bg-royal-gold/5 border border-royal-gold/25 p-7 sm:p-9 rounded-3xl relative gsap-stagger-item gsap-card-interactive"
                    >
-                     <h3 className="text-royal-gold text-[10px] font-black uppercase tracking-widest mb-6">رؤيتنا</h3>
-                     <p className="text-white text-xl font-bold leading-relaxed font-header">نقدّم خدمة راقية بثبات وجودة عالية، ونكون الاختيار الأول لكل عميل بيدوّر على تنفيذ من غير أخطاء ومستوى يفرق.</p>
+                     <h3 className="text-royal-gold text-xs sm:text-sm font-bold mb-4">رؤيتنا</h3>
+                     <p className="text-white text-lg sm:text-xl font-bold leading-relaxed font-header">نقدّم خدمة راقية بثبات وجودة عالية، ونكون الاختيار الأول لكل عميل بيدوّر على تنفيذ من غير أخطاء ومستوى يفرق.</p>
                    </motion.div>
-                   <motion.div 
+                   <motion.div
                      initial={{ opacity: 0, scale: 0.95 }}
                      whileInView={{ opacity: 1, scale: 1 }}
                      viewport={{ once: true }}
-                     className="bg-zinc-900/50 border border-white/10 p-10 rounded-[3rem] gsap-stagger-item gsap-card-interactive"
+                     className="bg-zinc-900/50 border border-white/10 p-7 sm:p-9 rounded-3xl gsap-stagger-item gsap-card-interactive"
                    >
-                     <h3 className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-6">نظام الخدمة</h3>
-                     <p className="text-zinc-300 text-lg leading-relaxed">
+                     <h3 className="text-zinc-400 text-xs sm:text-sm font-bold mb-4">نظام الخدمة</h3>
+                     <p className="text-zinc-200 text-base sm:text-lg leading-relaxed">
                        سواء محتاج خدمة كاملة، أو معدات فقط، أو فريق ضيافة… <br/>
-                       <span className="text-white font-black">إحنا جاهزين ننفّذ باحتراف.</span>
+                       <span className="text-white font-bold">إحنا جاهزين ننفّذ باحتراف.</span>
                      </p>
                    </motion.div>
                  </div>
                </div>
 
-               <h2 className="text-6xl font-black text-white font-header mb-8 uppercase tracking-tighter gsap-reveal">إحجز الآن</h2>
-               <p className="text-zinc-300 mb-20 text-lg leading-relaxed max-w-2xl mx-auto gsap-reveal">فريقنا جاهز لتصميم باقتك الخاصة والرد على كافة استفساراتكم لضمان ليلة عمر مثالية.</p>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8 gsap-stagger-container">
-                  <a href="tel:01097356529" className="bg-[#0c0c0c] border border-white/5 p-16 rounded-[4rem] flex flex-col items-center card-shadow group hover:border-[#c5a059]/50 transition-all gsap-stagger-item gsap-card-interactive">
-                     <span className="text-5xl mb-8 group-hover:scale-110 transition-transform">📞</span>
-                     <span className="text-zinc-400 text-[10px] font-black uppercase tracking-[0.4em] mb-4">اتصال مباشر</span>
-                     <span className="text-3xl font-black text-white font-numbers tracking-tighter">01097356529</span>
+               <h2 className="text-4xl sm:text-5xl font-bold text-white font-header mb-4 gsap-reveal">احجز الآن</h2>
+               <p className="text-zinc-300 mb-12 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto gsap-reveal">فريقنا جاهز لتصميم باقتك الخاصة والرد على كافة استفساراتكم لضمان ليلة عمر مثالية.</p>
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10 gsap-stagger-container">
+                  <a href="tel:01097356529" className="bg-[#0c0c0c] border border-white/10 p-8 sm:p-12 rounded-3xl flex flex-col items-center card-shadow group hover:border-[#c5a059]/50 transition-all gsap-stagger-item gsap-card-interactive">
+                     <span className="text-4xl sm:text-5xl mb-5 group-hover:scale-110 transition-transform">📞</span>
+                     <span className="text-zinc-400 text-xs sm:text-sm font-bold mb-2.5">اتصال مباشر</span>
+                     <span dir="ltr" className="text-2xl sm:text-3xl font-extrabold text-white font-numbers tracking-wider">01097356529</span>
                   </a>
-                  <a href={WHATSAPP_BUSINESS_LINK} target="_blank" rel="noopener noreferrer" className="bg-[#0c0c0c] border border-white/5 p-16 rounded-[4rem] flex flex-col items-center card-shadow group hover:border-green-500/50 transition-all gsap-stagger-item gsap-card-interactive">
-                     <WhatsAppIcon className="w-16 h-16 mb-8 text-[#25D366] group-hover:scale-110 transition-transform" />
-                     <span className="text-zinc-400 text-[10px] font-black uppercase tracking-[0.4em] mb-4">واتساب بيزنس</span>
-                     <span className="text-3xl font-black text-[#c5a059] font-header">ارسل رسالة</span>
+                  <a href={WHATSAPP_BUSINESS_LINK} target="_blank" rel="noopener noreferrer" className="bg-[#0c0c0c] border border-white/10 p-8 sm:p-12 rounded-3xl flex flex-col items-center card-shadow group hover:border-green-500/50 transition-all gsap-stagger-item gsap-card-interactive">
+                     <WhatsAppIcon className="w-12 h-12 sm:w-14 sm:h-14 mb-5 text-[#25D366] group-hover:scale-110 transition-transform" />
+                     <span className="text-zinc-400 text-xs sm:text-sm font-bold mb-2.5">واتساب بيزنس</span>
+                     <span className="text-2xl sm:text-3xl font-bold text-[#c5a059] font-header">أرسل رسالة</span>
                   </a>
                </div>
 
+               <div className="mb-14">
+                 <OfficeMap />
+               </div>
 
-				<div className="mb-20">
-					<OfficeMap />
-				</div>
-
-
-               <div className="flex justify-center gap-12 mb-40">
-                  <a href="https://www.facebook.com/share/1BQaYtSWYd/" target="_blank" rel="noopener noreferrer" className="group flex flex-col items-center gap-4">
-                     <div className="w-20 h-20 rounded-full bg-[#0c0c0c] border border-white/5 flex items-center justify-center card-shadow group-hover:border-[#1877F2]/50 transition-all group-hover:scale-110">
-                        <svg className="w-10 h-10 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24">
+               <div className="flex justify-center gap-8 sm:gap-12 mb-16">
+                  <a href="https://www.facebook.com/share/1BQaYtSWYd/" target="_blank" rel="noopener noreferrer" className="group flex flex-col items-center gap-3">
+                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#0c0c0c] border border-white/10 flex items-center justify-center card-shadow group-hover:border-[#1877F2]/50 transition-all group-hover:scale-110">
+                        <svg className="w-8 h-8 sm:w-9 sm:h-9 text-[#1877F2]" fill="currentColor" viewBox="0 0 24 24">
                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                         </svg>
                      </div>
-                     <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Facebook</span>
+                     <span dir="ltr" className="text-zinc-400 text-xs font-bold uppercase tracking-widest font-numbers">Facebook</span>
                   </a>
-                  <a href="https://www.instagram.com/lkings.of.happinessl?igsh=bjZiY3RoeGNwcmQ0" target="_blank" rel="noopener noreferrer" className="group flex flex-col items-center gap-4">
-                     <div className="w-20 h-20 rounded-full bg-[#0c0c0c] border border-white/5 flex items-center justify-center card-shadow group-hover:border-[#E4405F]/50 transition-all group-hover:scale-110">
-                        <svg className="w-10 h-10 text-[#E4405F]" fill="currentColor" viewBox="0 0 24 24">
+                  <a href="https://www.instagram.com/lkings.of.happinessl?igsh=bjZiY3RoeGNwcmQ0" target="_blank" rel="noopener noreferrer" className="group flex flex-col items-center gap-3">
+                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#0c0c0c] border border-white/10 flex items-center justify-center card-shadow group-hover:border-[#E4405F]/50 transition-all group-hover:scale-110">
+                        <svg className="w-8 h-8 sm:w-9 sm:h-9 text-[#E4405F]" fill="currentColor" viewBox="0 0 24 24">
                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                         </svg>
                      </div>
-                     <span className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Instagram</span>
+                     <span dir="ltr" className="text-zinc-400 text-xs font-bold uppercase tracking-widest font-numbers">Instagram</span>
                   </a>
                </div>
 
                {/* Complaints and Suggestions Section */}
-               <div className="mt-32 pt-20 border-t border-white/5">
-                 <a 
-                   href={`https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('لدي شكوى أو اقتراح:')}`} 
-                   target="_blank" 
+               <div className="pt-14 border-t border-white/10">
+                 <a
+                   href={`https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('لدي شكوى أو اقتراح:')}`}
+                   target="_blank"
                    rel="noopener noreferrer"
                    className="group inline-block"
                  >
-                   <h3 className="text-3xl md:text-5xl font-black text-white font-header mb-6 tracking-tighter group-hover:text-royal-gold transition-all duration-300 transform group-hover:scale-105">
-                     الشكاوى و الاقتراحات
+                   <h3 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white font-header mb-4 group-hover:text-royal-gold transition-all duration-300">
+                     الشكاوى والاقتراحات
                    </h3>
                  </a>
-                 <div className="w-16 h-0.5 bg-royal-gold mx-auto mb-8"></div>
-                 <p className="text-zinc-400 text-xl md:text-2xl font-light leading-relaxed italic">
-                   أذا اسعدناك فتحدث عنا<br/>
-                   وان لم نسعدك فتحدث الينا
+                 <div className="w-16 h-1 bg-royal-gold mx-auto mb-6 rounded-full"></div>
+                 <p className="text-zinc-300 text-lg sm:text-xl md:text-2xl font-medium leading-relaxed">
+                   إذا أسعدناك فتحدث عنا<br/>
+                   وإن لم نسعدك فتحدث إلينا
                  </p>
                </div>
             </div>
           </div>
         )}
-        
+
         {view === 'tools' && (
-           <div className="container mx-auto px-6 py-32 animate-in fade-in duration-700 text-right">
-             <div className="text-center mb-24">
-               <h2 className="text-5xl md:text-7xl font-black text-white font-header mb-6">كتالوج المعدات الملكية</h2>
-               <p className="text-[#c5a059] text-[10px] font-black uppercase tracking-[0.6em]">Visual Catalog</p>
+           <div className="royal-container pt-28 sm:pt-32 pb-24 animate-in fade-in duration-700 text-right">
+             <div className="text-center mb-14 md:mb-16">
+               <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white font-header mb-4">كتالوج المعدات الملكية</h2>
+               <div className="w-20 h-1 bg-royal-gold mx-auto mb-5 rounded-full"></div>
+               <p dir="ltr" className="text-[#c5a059] text-[11px] sm:text-xs font-bold uppercase tracking-[0.28em] font-numbers">Visual Catalog</p>
              </div>
 
-             {!activeEquipmentCat ? (
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+             <div className="mb-8 max-w-3xl mx-auto">
+               <label htmlFor="equipment-search" className="block text-sm text-zinc-300 font-bold mb-2">ابحث في المعدات والأقسام</label>
+               <input id="equipment-search" type="search" value={equipmentSearch} onChange={e => setEquipmentSearch(e.target.value)} placeholder="مثلاً: ترابيزة أو كوفي" className="w-full rounded-2xl bg-[#111] border border-white/20 focus:border-[#c5a059] text-white p-4 outline-none" />
+             </div>
+             <nav aria-label="أقسام المعدات" className="flex gap-2 overflow-x-auto pb-4 mb-8">
+               <button type="button" aria-current={!activeEquipmentCat ? 'page' : undefined} onClick={() => { setEquipmentSearch(''); navigateTo('tools'); }} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold ${!activeEquipmentCat ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>كل الأقسام</button>
+               {EQUIPMENT_DATA.map(cat => <button type="button" key={cat.id} aria-current={activeEquipmentCat?.id === cat.id ? 'page' : undefined} onClick={() => { setEquipmentSearch(''); navigateTo('tools', { activeEquipmentCatId: cat.id }); }} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold ${activeEquipmentCat?.id === cat.id ? 'bg-[#c5a059] text-black border-[#c5a059]' : 'border-white/20 text-white'}`}>{cat.name}</button>)}
+             </nav>
+             {equipmentSearch.trim() ? (() => {
+               const term = equipmentSearch.trim().toLocaleLowerCase('ar');
+               const matches = EQUIPMENT_DATA.flatMap(cat => {
+                 const items = [...(cat.items ?? []), ...(cat.sections ?? []).flatMap(section => section.items), ...(cat.quickSelections ?? [])];
+                 const matched = items.filter(item => [item.name, 'note' in item ? item.note : '', ...('options' in item ? (item.options ?? []).map(option => option.name) : [])].some(text => text?.toLocaleLowerCase('ar').includes(term)));
+                 return cat.name.toLocaleLowerCase('ar').includes(term) && !matched.length ? [{ cat, name: cat.name, id: cat.id }] : matched.map(item => ({ cat, name: item.name || 'صنف بدون اسم', id: item.id }));
+               });
+               return <div aria-live="polite">{matches.length ? <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">{matches.map(({cat, name, id}) => <button key={`${cat.id}-${id}`} onClick={() => { setEquipmentSearch(''); navigateTo('tools', { activeEquipmentCatId: cat.id }); }} className="text-right p-5 rounded-2xl bg-[#111] border border-white/10 hover:border-[#c5a059] text-white"><span className="font-bold block">{name}</span><span className="text-[#c5a059] text-sm">{cat.name} ← عرض القسم</span></button>)}</div> : <p className="text-center text-zinc-300 py-8">مفيش نتائج مطابقة. جرّب كلمة تانية.</p>}</div>;
+             })() : !activeEquipmentCat ? (
+
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
                  {EQUIPMENT_DATA.map(cat => (
-                   <div key={cat.id} onClick={() => navigateTo('tools', { activeEquipmentCatId: cat.id })} className="group bg-[#0c0c0c] border border-white/5 p-10 rounded-[2.5rem] text-center cursor-pointer card-shadow relative overflow-hidden transition-all hover:border-[#c5a059]/30">
+                   <button type="button" key={cat.id} onClick={() => navigateTo('tools', { activeEquipmentCatId: cat.id })} className="group bg-[#0c0c0c] border border-white/10 p-7 sm:p-8 rounded-3xl text-center cursor-pointer card-shadow relative overflow-hidden transition-all hover:border-[#c5a059]/40 flex flex-col items-center justify-between">
                      <div className="absolute top-0 right-0 w-24 h-24 bg-royal-gold/5 rounded-bl-[8rem] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                     <span className="text-5xl block mb-6 grayscale group-hover:grayscale-0 transition-all duration-500">{cat.icon}</span>
-                     <h3 className="text-lg font-black text-white mb-2 font-header">{cat.name}</h3>
-                     <div className="mt-6 h-0.5 w-8 bg-[#c5a059]/20 mx-auto group-hover:w-16 group-hover:bg-[#c5a059] transition-all"></div>
-                   </div>
+                     <span className="text-5xl block mb-5 grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-500">{cat.icon}</span>
+                     <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-[#c5a059] transition-colors mb-2 font-header">{cat.name}</h3>
+                     <div className="mt-4 h-0.5 w-8 bg-[#c5a059]/30 mx-auto group-hover:w-16 group-hover:bg-[#c5a059] transition-all"></div>
+                   </button>
                  ))}
                </div>
              ) : (
                 <div>
-                   <div className="flex flex-col md:flex-row justify-between items-center mb-16 gap-8 flex-row-reverse border-b border-white/5 pb-10">
+                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-12 gap-5 border-b border-white/10 pb-8">
                       <div className="text-right">
-                         <h3 className="text-4xl font-black text-white font-header mb-2">{activeEquipmentCat.name}</h3>
-                         <p className="text-[#c5a059] text-xs font-bold uppercase tracking-widest">تصفح المجموعة المختارة</p>
+                         <h3 className="text-3xl sm:text-4xl font-bold text-white font-header mb-2">{activeEquipmentCat.name}</h3>
+                         <p className="text-[#c5a059] text-xs sm:text-sm font-semibold">تصفح المجموعة المختارة</p>
                       </div>
-                      <div className="flex gap-4 flex-row-reverse items-center">
-                        <button onClick={() => window.history.back()} className="royal-btn-secondary px-6 py-3 text-xs font-black uppercase tracking-widest flex items-center gap-2.5">
-                           <ArrowRight className="w-4 h-4" />
-                           <span>العودة</span>
-                        </button>
+                      <div className="flex flex-wrap gap-3 items-center w-full sm:w-auto">
                         {selectedEquipment.length > 0 && (
-                          <button 
+                          <button
                             onClick={() => {
                               const allItems = activeEquipmentCat?.items || activeEquipmentCat?.sections?.flatMap(s => s.items) || [];
                               const itemsToOrder = allItems.filter(i => selectedEquipment.includes(i.id));
                               handleShareEquipment(itemsToOrder);
                             }}
-                            className="royal-btn-primary px-8 py-3 text-xs font-black uppercase tracking-widest shadow-xl flex items-center gap-2.5"
+                            className="royal-btn-primary px-6 py-3 text-xs sm:text-sm font-extrabold shadow-xl"
                           >
                             <WhatsAppIcon className="w-4 h-4 text-black" />
-                            <span>إرسال الطلب ({selectedEquipment.length})</span>
+                            <span>إرسال الطلب (<span className="font-numbers">{selectedEquipment.length}</span>)</span>
                           </button>
                         )}
+                        <button onClick={() => window.history.back()} className="royal-btn-secondary px-5 py-3 text-xs sm:text-sm font-bold">
+                           <ArrowRight className="w-4 h-4" />
+                           <span>العودة للأقسام</span>
+                        </button>
                       </div>
                    </div>
-                   
+
                    {activeEquipmentCat.extraInfo && (
-                      <div className="mb-16 p-8 md:p-12 bg-[#0c0c0c] border border-[#c5a059]/20 rounded-[2.5rem] card-shadow text-center relative overflow-hidden">
+                      <div className="mb-12 p-6 sm:p-10 bg-[#0c0c0c] border border-[#c5a059]/25 rounded-3xl card-shadow text-center relative overflow-hidden">
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1 bg-gradient-to-r from-transparent via-[#c5a059]/50 to-transparent"></div>
-                        <div className={`space-y-4 ${activeEquipmentCat.quickSelections ? 'mb-12' : ''}`}>
+                        <div className={`space-y-3 ${activeEquipmentCat.quickSelections ? 'mb-8' : ''}`}>
                           {activeEquipmentCat.extraInfo.map((info, idx) => (
-                            <p key={idx} className="text-lg md:text-xl text-white font-black font-header leading-relaxed whitespace-pre-line">
+                            <p key={idx} className="text-base sm:text-lg md:text-xl text-white font-bold font-header leading-relaxed whitespace-pre-line">
                               {info}
                             </p>
                           ))}
                         </div>
 
                         {activeEquipmentCat.quickSelections && (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 text-right" dir="rtl">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-right" dir="rtl">
                             {activeEquipmentCat.quickSelections.map((item) => {
                               const isSelected = selectedEquipment.includes(item.id);
                               return (
@@ -2342,20 +2546,18 @@ const App: React.FC = () => {
                                   key={item.id}
                                   onClick={() => setSelectedEquipment(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}
                                   className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                                    isSelected 
-                                      ? 'bg-royal-gold text-black border-royal-gold shadow-[0_10px_20px_rgba(197,160,89,0.2)]' 
-                                      : 'bg-white/5 text-zinc-300 border-white/10 hover:border-royal-gold/40 hover:bg-white/10'
+                                    isSelected
+                                      ? 'bg-royal-gold text-black border-royal-gold shadow-[0_10px_20px_rgba(197,160,89,0.2)]'
+                                      : 'bg-white/5 text-zinc-200 border-white/10 hover:border-royal-gold/40 hover:bg-white/10'
                                   }`}
                                 >
                                    <div className="flex items-center gap-3">
-                                      <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${isSelected ? 'bg-black border-black shadow-inner' : 'border-white/20 bg-black/20'}`}>
+                                      <div className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center transition-all ${isSelected ? 'bg-black border-black shadow-inner' : 'border-white/25 bg-black/20'}`}>
                                         {isSelected && <CheckIcon className="w-3.5 h-3.5 text-royal-gold" />}
                                       </div>
-                                      <span className="text-sm font-black tracking-tight">{item.name}</span>
+                                      <span className="text-sm font-bold">{item.name}</span>
                                    </div>
-                                   <div className="flex flex-col items-end">
-                                     <span className={`text-[10px] font-numbers font-black ${isSelected ? 'text-black/60' : 'text-royal-gold/60'}`}>{item.price} ج.م</span>
-                                   </div>
+                                   <span className={`text-xs font-numbers font-bold ${isSelected ? 'text-black/80' : 'text-royal-gold'}`}>{item.price} ج.م</span>
                                 </button>
                               );
                             })}
@@ -2363,51 +2565,51 @@ const App: React.FC = () => {
                         )}
                       </div>
                     )}
-                   
+
                    {activeEquipmentCat.items && (
                       activeEquipmentCat.displayMode === 'grid' ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
                           {activeEquipmentCat.items.map((item) => {
                             const isSelected = selectedEquipment.includes(item.id);
                             const qty = equipmentQuantities[item.id] || 1;
                             return (
-                              <div key={item.id} className={`p-8 rounded-[2.5rem] border transition-all duration-500 ${isSelected ? 'border-royal-gold bg-royal-gold/5 shadow-royal-gold/10' : 'border-white/5 bg-[#0c0c0c] hover:border-white/10'} card-shadow`}>
-                                <div className="flex justify-between items-center flex-row-reverse mb-6">
-                                  <button 
+                              <div key={item.id} className={`p-6 sm:p-7 rounded-3xl border transition-all duration-500 ${isSelected ? 'border-royal-gold bg-royal-gold/10 shadow-royal-gold/10' : 'border-white/10 bg-[#0c0c0c] hover:border-white/20'} card-shadow`}>
+                                <div className="flex justify-between items-center gap-3 mb-4">
+                                  <button
                                     onClick={() => setSelectedEquipment(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}
                                     className="flex-1 text-right"
                                   >
-                                    <h4 className={`text-lg font-black transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
-                                    {item.price && <p className="text-zinc-500 text-xs font-numbers font-black mt-1">{item.price} EGP</p>}
+                                    <h4 className={`text-base sm:text-lg font-bold transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
+                                    {item.price && <p className="text-zinc-400 text-xs sm:text-sm font-bold mt-1"><span className="font-numbers text-zinc-200">{item.price}</span> ج.م</p>}
                                   </button>
-                                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/20'}`}>
+                                  <div className={`w-6 h-6 shrink-0 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/20'}`}>
                                     {isSelected && <CheckIcon className="w-4 h-4 text-black" />}
                                   </div>
                                 </div>
-                                
+
                                 {isSelected && (
-                                  <div className="flex items-center justify-between bg-black/40 rounded-2xl p-4 flex-row-reverse animate-in fade-in zoom-in-95 duration-300">
+                                  <div className="flex items-center justify-between bg-black/50 rounded-2xl p-3.5 gap-3 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
                                     <div className="text-right">
-                                      <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-1">العدد المطلوب</span>
-                                      {item.price && <span className="text-royal-gold font-black font-numbers">{(item.price * qty).toLocaleString()} ج.م</span>}
+                                      <span className="text-xs text-zinc-400 font-semibold block mb-0.5">العدد المطلوب</span>
+                                      {item.price && <span className="text-royal-gold text-sm font-bold"><span className="font-numbers">{(item.price * qty).toLocaleString()}</span> ج.م</span>}
                                     </div>
-                                    <div className="flex items-center gap-4">
-                                      <button 
+                                    <div className="flex items-center gap-2">
+                                      <button
                                         onClick={() => updateEquipmentQty(item.id, 1)}
-                                        className="w-10 h-10 rounded-xl bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-xl"
+                                        className="w-9 h-9 rounded-xl bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold text-lg"
                                       >
                                         +
                                       </button>
-                                      <input 
+                                      <input
                                         type="number"
                                         min="1"
                                         value={qty}
                                         onChange={(e) => updateEquipmentQtySet(item.id, parseInt(e.target.value) || 1)}
-                                        className="w-16 h-10 bg-white/5 border border-white/10 rounded-xl text-white text-center font-black font-numbers text-lg focus:border-royal-gold/50 outline-none transition-colors"
+                                        className="w-14 h-9 bg-white/5 border border-white/10 rounded-xl text-white text-center font-extrabold font-numbers text-base focus:border-royal-gold/50 outline-none transition-colors"
                                       />
-                                      <button 
+                                      <button
                                         onClick={() => updateEquipmentQty(item.id, -1)}
-                                        className="w-10 h-10 rounded-xl bg-white/5 text-white flex items-center justify-center hover:bg-white/10 transition-all font-bold text-xl"
+                                        className="w-9 h-9 rounded-xl bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition-all font-bold text-lg"
                                       >
                                         -
                                       </button>
@@ -2419,11 +2621,11 @@ const App: React.FC = () => {
                           })}
                         </div>
                       ) : (
-                        <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
                           {activeEquipmentCat.items.map((item) => (
-                            <EquipmentCard 
-                              key={item.id} 
-                              item={item} 
+                            <EquipmentCard
+                              key={item.id}
+                              item={item}
                               selected={selectedEquipment.includes(item.id)}
                               quantity={equipmentQuantities[item.id] || 1}
                               onToggle={(id) => setSelectedEquipment(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
@@ -2450,58 +2652,58 @@ const App: React.FC = () => {
                    )}
 
                    {activeEquipmentCat.sections && activeEquipmentCat.sections.map((section, sIdx) => (
-                      <div key={sIdx} className={sIdx > 0 ? "mt-24" : ""}>
+                      <div key={sIdx} className={sIdx > 0 ? "mt-16 sm:mt-20" : ""}>
                         {section.title && (
-                          <div className="mb-12 text-right">
-                            <h4 className="text-2xl md:text-3xl font-black text-royal-gold font-header whitespace-pre-line leading-relaxed">
+                          <div className="mb-8 text-right">
+                            <h4 className="text-2xl sm:text-3xl font-bold text-royal-gold font-header whitespace-pre-line leading-relaxed">
                               {section.title}
                             </h4>
-                            <div className="w-24 h-1 bg-[#c5a059] mt-6 mr-0"></div>
+                            <div className="w-20 h-1 bg-[#c5a059] mt-3 rounded-full"></div>
                           </div>
                         )}
                         {activeEquipmentCat.displayMode === 'grid' ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
                             {section.items.map((item) => {
                               const isSelected = selectedEquipment.includes(item.id);
                               const qty = equipmentQuantities[item.id] || 1;
                               return (
-                                <div key={item.id} className={`p-8 rounded-[2.5rem] border transition-all duration-500 ${isSelected ? 'border-royal-gold bg-royal-gold/5 shadow-royal-gold/10' : 'border-white/5 bg-[#0c0c0c] hover:border-white/10'} card-shadow`}>
-                                  <div className="flex justify-between items-center flex-row-reverse mb-6">
-                                    <button 
+                                <div key={item.id} className={`p-6 sm:p-7 rounded-3xl border transition-all duration-500 ${isSelected ? 'border-royal-gold bg-royal-gold/10 shadow-royal-gold/10' : 'border-white/10 bg-[#0c0c0c] hover:border-white/20'} card-shadow`}>
+                                  <div className="flex justify-between items-center gap-3 mb-4">
+                                    <button
                                       onClick={() => setSelectedEquipment(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])}
                                       className="flex-1 text-right"
                                     >
-                                      <h4 className={`text-lg font-black transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
-                                      {item.price && <p className="text-zinc-500 text-xs font-numbers font-black mt-1">{item.price} EGP</p>}
+                                      <h4 className={`text-base sm:text-lg font-bold transition-colors ${isSelected ? 'text-royal-gold' : 'text-white'}`}>{item.name}</h4>
+                                      {item.price && <p className="text-zinc-400 text-xs sm:text-sm font-bold mt-1"><span className="font-numbers text-zinc-200">{item.price}</span> ج.م</p>}
                                     </button>
-                                    <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/20'}`}>
+                                    <div className={`w-6 h-6 shrink-0 rounded-full border flex items-center justify-center transition-all ${isSelected ? 'bg-royal-gold border-royal-gold' : 'border-white/20'}`}>
                                       {isSelected && <CheckIcon className="w-4 h-4 text-black" />}
                                     </div>
                                   </div>
-                                  
+
                                   {isSelected && (
-                                    <div className="flex items-center justify-between bg-black/40 rounded-xl p-3 flex-row-reverse animate-in fade-in zoom-in-95 duration-300">
+                                    <div className="flex items-center justify-between bg-black/50 rounded-2xl p-3 gap-3 animate-in fade-in zoom-in-95 duration-300 border border-white/10">
                                       <div className="text-right">
-                                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest block mb-1">العدد المطلوب</span>
-                                        {item.price && <span className="text-royal-gold font-black font-numbers">{(item.price * qty).toLocaleString()} ج.م</span>}
+                                        <span className="text-xs text-zinc-400 font-semibold block mb-0.5">العدد المطلوب</span>
+                                        {item.price && <span className="text-royal-gold text-sm font-bold"><span className="font-numbers">{(item.price * qty).toLocaleString()}</span> ج.م</span>}
                                       </div>
-                                      <div className="flex items-center gap-4">
-                                        <button 
+                                      <div className="flex items-center gap-2">
+                                        <button
                                           onClick={() => updateEquipmentQty(item.id, 1)}
-                                          className="w-8 h-8 rounded-full bg-royal-gold/10 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold"
+                                          className="w-8 h-8 rounded-full bg-royal-gold/15 text-royal-gold flex items-center justify-center hover:bg-royal-gold hover:text-black transition-all font-bold"
                                         >
                                           +
                                         </button>
-                                        <input 
+                                        <input
                                           type="number"
                                           min="1"
                                           value={qty}
                                           onChange={(e) => updateEquipmentQtySet(item.id, parseInt(e.target.value) || 1)}
-                                          className="w-12 h-8 bg-white/5 border border-white/10 rounded-lg text-white text-center font-black font-numbers text-sm focus:border-royal-gold/50 outline-none transition-colors"
+                                          className="w-12 h-8 bg-white/5 border border-white/10 rounded-lg text-white text-center font-extrabold font-numbers text-sm focus:border-royal-gold/50 outline-none transition-colors"
                                         />
-                                        <button 
+                                        <button
                                           onClick={() => updateEquipmentQty(item.id, -1)}
-                                          className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-white/10 transition-all font-bold"
+                                          className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all font-bold"
                                         >
                                           -
                                         </button>
@@ -2513,11 +2715,11 @@ const App: React.FC = () => {
                             })}
                           </div>
                         ) : (
-                          <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-start">
                             {section.items.map((item) => (
-                              <EquipmentCard 
-                                key={item.id} 
-                                item={item} 
+                              <EquipmentCard
+                                key={item.id}
+                                item={item}
                                 selected={selectedEquipment.includes(item.id)}
                                 quantity={equipmentQuantities[item.id] || 1}
                                 onToggle={(id) => setSelectedEquipment(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
@@ -2545,7 +2747,6 @@ const App: React.FC = () => {
                       </div>
                    ))}
 
-
                 </div>
              )}
            </div>
@@ -2553,26 +2754,27 @@ const App: React.FC = () => {
 
       <AnimatePresence>
         {lightboxImage && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6" 
+              className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6"
               onClick={() => setLightboxImage(null)}
             >
-              <button className="absolute top-10 right-10 text-white hover:text-[#c5a059] transition-colors z-10">
-                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              <button aria-label="إغلاق الصورة" className="absolute top-6 right-6 sm:top-10 sm:right-10 text-white hover:text-[#c5a059] transition-colors z-10 p-2 rounded-full bg-white/10">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
               </button>
-              <motion.img 
+              <motion.img
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
-                src={lightboxImage} 
-                className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl" 
-                alt="Zoomed View" 
+                src={optimizeCloudinaryImage(lightboxImage, 1600)}
+                className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl"
+                alt="معاينة مكبرة للصنف"
                 loading="eager"
                 decoding="async"
                 referrerPolicy="no-referrer"
+                onError={handleSafeImageError}
               />
             </motion.div>
         )}
@@ -2584,7 +2786,7 @@ const App: React.FC = () => {
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom,0px)+6rem)] z-[250] mx-auto max-w-xl rounded-2xl border border-[#c5a059]/40 bg-[#111]/95 px-5 py-4 text-center text-sm text-white shadow-2xl"
+          className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom,0px)+6rem)] z-[250] mx-auto max-w-xl rounded-2xl border border-[#c5a059]/40 bg-[#111]/95 px-5 py-4 text-center text-sm font-semibold text-white shadow-2xl"
         >
           {orderNotice}
         </div>
@@ -2596,20 +2798,20 @@ const App: React.FC = () => {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             onClick={() => window.history.back()}
-            className="fixed bottom-[calc(env(safe-area-inset-bottom,0.75rem)+1.25rem)] right-4 md:right-10 z-[120] w-13 h-13 md:w-16 md:h-16 rounded-full royal-btn-secondary !p-0 shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center group overflow-hidden border border-royal-gold/40 hover:border-royal-gold"
+            className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] right-4 sm:right-8 z-[120] w-14 h-14 sm:w-15 sm:h-15 rounded-full royal-btn-secondary !p-0 shadow-[0_20px_50px_rgba(0,0,0,0.85)] flex flex-col items-center justify-center group overflow-hidden border border-royal-gold/40 hover:border-royal-gold"
           >
             <div className="absolute inset-0 bg-gradient-to-tr from-royal-gold/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <ArrowRight className="w-5 h-5 md:w-6 md:h-6 relative z-10 text-royal-gold group-hover:text-white transition-colors" />
-            <span className="text-[9px] font-black uppercase tracking-tighter relative z-10 text-zinc-300 group-hover:text-royal-gold transition-colors">عودة</span>
+            <ArrowRight className="w-5 h-5 relative z-10 text-royal-gold group-hover:text-white transition-colors" />
+            <span className="text-[11px] font-bold relative z-10 text-zinc-200 group-hover:text-royal-gold transition-colors">عودة</span>
           </motion.button>
         )}
       </AnimatePresence>
 
       {view !== 'home' && (
-        <FloatingCart 
+        <FloatingCart
           navigateTo={navigateTo}
           selectedEquipment={selectedEquipment}
           equipmentQuantities={equipmentQuantities}
@@ -2655,63 +2857,42 @@ const App: React.FC = () => {
         </React.Suspense>
       )}
 
-      <footer className="py-24 md:py-36 bg-[#020202] text-center relative overflow-hidden">
-         {/* Background Video with luxury atmospheric treatment */}
-         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <video 
-               autoPlay 
-               loop 
-               muted 
-               playsInline 
-               preload="auto"
-               className="w-full h-full object-cover object-center scale-105"
-               style={{ 
-                  filter: 'blur(0.5px) brightness(0.65) contrast(1.1) saturate(1.05)'
-               }}
-            >
-               <source src="https://res.cloudinary.com/dhktkzpap/video/upload/171262654_1788182400783352_jlqkjm.mp4" type="video/mp4" />
-               <source src="https://res.cloudinary.com/dhktkzpap/video/upload/171262654_1788182400783352_jlqkjm.webm" type="video/webm" />
-               {/* Embed iframe fallback */}
-               <iframe 
-                  src="https://player.cloudinary.com/embed/?cloud_name=dhktkzpap&public_id=171262654_1788182400783352_jlqkjm&player[muted]=true&player[autoplay]=true&player[loop]=true&player[controls]=false" 
-                  className="w-full h-full object-cover border-0"
-                  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                  title="Footer Background Video"
-               />
-            </video>
-         </div>
+      <footer className="py-20 sm:py-24 md:py-32 bg-[#020202] text-center relative overflow-hidden">
+         {/* Lazy-loaded Background Video with instant Poster & Data-Saver / Reduced-Motion protection */}
+         <LazyFooterVideo />
 
          {/* Cinematic gradient blend connecting seamlessly with the page */}
          <div className="absolute inset-0 bg-gradient-to-b from-[#050505] via-black/45 to-[#020202] pointer-events-none" />
-         {/* Subtle royal vignette */}
          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0.1)_0%,rgba(2,2,2,0.75)_100%)] pointer-events-none" />
-         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[300px] bg-royal-gold/8 blur-[130px] rounded-full pointer-events-none"></div>
+         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] max-w-full h-[260px] bg-royal-gold/8 blur-[130px] rounded-full pointer-events-none"></div>
 
-         <div className="flex justify-center items-center mb-10 mx-auto max-w-full relative z-10" style={{ width: '916px', height: '132.9896px' }}>
-            <BrandLogo className="w-24 h-24 md:w-32 md:h-32 drop-shadow-[0_10px_30px_rgba(0,0,0,0.9)]" showGlow={true} />
-         </div>
-         <h2 className="text-royal-gold font-black text-4xl md:text-5xl font-header mb-6 tracking-tighter relative z-10 drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">ملوك السعادة</h2>
-         <p className="text-zinc-200 text-[9px] md:text-[10px] font-black uppercase tracking-[0.8em] mb-8 relative z-10 drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">The Royal Taste of Happiness</p>
-         
-         <div className="flex justify-center gap-6 mb-12 relative z-10">
-            <a href="tel:+201097356529" className="text-white hover:text-royal-gold transition-colors p-2.5 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
-              <PhoneIcon className="w-5 h-5" />
-            </a>
-            <a href="https://wa.me/201097356529" target="_blank" rel="noopener noreferrer" className="text-white hover:text-royal-gold transition-colors p-2.5 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
-              <WhatsAppIcon className="w-5 h-5" />
-            </a>
-            <a href="https://www.google.com/maps?q=30.0076434,31.2152192&z=17&hl=en" target="_blank" rel="noopener noreferrer" className="text-white hover:text-royal-gold transition-colors p-2.5 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
-              <MapPinIcon className="w-5 h-5" />
-            </a>
-            <a href="https://www.instagram.com/lkings.of.happinessl?igsh=bjZiY3RoeGNwcmQ0" target="_blank" rel="noopener noreferrer" className="text-white hover:text-royal-gold transition-colors p-2.5 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
-              <InstagramIcon className="w-5 h-5" />
-            </a>
-            <a href="https://www.facebook.com/share/1BQaYtSWYd/" target="_blank" rel="noopener noreferrer" className="text-white hover:text-royal-gold transition-colors p-2.5 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
-              <FacebookIcon className="w-5 h-5" />
-            </a>
-         </div>
+         <div className="royal-container relative z-10 flex flex-col items-center">
+           <div className="flex justify-center items-center mb-5">
+              <BrandLogo className="w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 drop-shadow-[0_10px_30px_rgba(0,0,0,0.9)]" showGlow={true} />
+           </div>
+           <h2 className="text-royal-gold font-bold text-3xl sm:text-4xl md:text-5xl font-header mb-3 drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">ملوك السعادة</h2>
+           <p dir="ltr" className="text-zinc-200 text-[10px] sm:text-xs font-bold uppercase tracking-[0.28em] sm:tracking-[0.42em] font-numbers mb-8 drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">The Royal Taste of Happiness</p>
 
-         <p className="text-zinc-200 text-[9px] font-bold uppercase tracking-widest relative z-10 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">© 2025 Molok El Saada. Designed for Royalty.</p>
+           <div className="flex justify-center gap-4 sm:gap-5 mb-10">
+              <a href="tel:+201097356529" aria-label="اتصال هاتفي" className="text-white hover:text-royal-gold transition-colors p-3 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
+                <PhoneIcon className="w-5 h-5" />
+              </a>
+              <a href="https://wa.me/201097356529" aria-label="واتساب" target="_blank" rel="noopener noreferrer" className="text-white hover:text-royal-gold transition-colors p-3 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
+                <WhatsAppIcon className="w-5 h-5" />
+              </a>
+              <a href="https://www.google.com/maps?q=30.0076434,31.2152192&z=17&hl=en" aria-label="الموقع على الخريطة" target="_blank" rel="noopener noreferrer" className="text-white hover:text-royal-gold transition-colors p-3 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
+                <MapPinIcon className="w-5 h-5" />
+              </a>
+              <a href="https://www.instagram.com/lkings.of.happinessl?igsh=bjZiY3RoeGNwcmQ0" aria-label="إنستجرام" target="_blank" rel="noopener noreferrer" className="text-white hover:text-royal-gold transition-colors p-3 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
+                <InstagramIcon className="w-5 h-5" />
+              </a>
+              <a href="https://www.facebook.com/share/1BQaYtSWYd/" aria-label="فيسبوك" target="_blank" rel="noopener noreferrer" className="text-white hover:text-royal-gold transition-colors p-3 bg-black/50 backdrop-blur-md border border-white/20 rounded-full hover:border-royal-gold shadow-lg">
+                <FacebookIcon className="w-5 h-5" />
+              </a>
+           </div>
+
+           <p dir="ltr" className="text-zinc-300 text-[10px] sm:text-xs font-semibold uppercase tracking-[0.18em] font-numbers drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">© 2025 Molok El Saada. Designed for Royalty.</p>
+         </div>
       </footer>
     </div>
     </MotionConfig>
